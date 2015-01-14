@@ -1,10 +1,8 @@
-09 SEPTEMBER 2013 (written by ADW)
+STARTED 09 SEPTEMBER 2013 (written by ADW)
 
-This is a placeholder for the Terrapin terrace model, to be developed by Bob 
-Anderson's group at the University of Colorado.
+Terrapin (or TerraPIN) stands for "Terraces put into Numerics". It is a module that generates the expected terraces, both strath and fill, from prescribed river aggradation and degradation. 
 
-Copyright (C) 2013 Andrew D. Wickert, Katy R. Barnhart, Eric Winchell, 
-William Armstrong, Melissa A. Foster, Leif S. Anderson, and Robert S. Anderson
+Copyright (C) 2014 Andrew D. Wickert and Katy R. Barnhart
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
