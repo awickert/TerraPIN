@@ -3,6 +3,8 @@
 # Started 22 January 2015 by ADW
 # based on some earlier notes and code
 
+import numpy as np
+from matplotlib import pyplot as plt
 
 class Terrapin(object):
 """
@@ -37,7 +39,7 @@ programming being the prerequisite, of course!
     Early stages of development!
     """
     # elevation of the channel bedrock surface at the starting time
-    z_ch = -2
+    z_ch = 0
     # elevation of the channel alluvial surface at the starting time
     eta = 0
     # ASSUMING FOR NOW THAT IT STARTS ON A FLAT PLANE, AND SOMEHOW IS NOT
@@ -61,6 +63,105 @@ programming being the prerequisite, of course!
     k_a = 1E-2
     # Erodibility coefficient of bedrock
     K_r = 1E-4
+    # Surface elevation profiles -- start out flat
+    # bedrock (x,z)
+    z_br = np.array([[-np.inf, 0], [0, 0]])
+    # sediment (x,z) -- actually, this would be surface elevation
+    # Does sediment just exist in a little area or across the entire thing?
+    # Must exist above bedrock.
+    # So all units must be in order from bottom to top.
+    # But none exists now! Hm, have to think.
+    eta = np.array([[-np.inf, 0], [0, 0]])
+    
+    # Create arrays of values of angles and resistance to erosion
+    # Alluvium is always the last one
+    # Goes from bottom of strat column to top
+    alpha = [alpha_r, alpha_a]
+    k = [k_r, k_a]
+    lith = [z_br, eta]
+    
+    # Intersection-finding
+    
+    dz_ch__dt = -2.
+    
+    for t in [1]:
+      z_ch += dz_ch__dt
+      # In what material does the base of the channel lie?
+      # Easy since channel is at 0
+      # And what are all the layers above?
+      layer_bases = []
+      # Going to assume for now that the layers always stay in the same order
+      # and go from the bottom to the top
+      for layer in lith:
+        layer_bases.append(layer[-1,-1]) # Fix this to calculate those 
+                                         # values at chosen x
+                                         # can write a function to do this
+         # Then can find those above the point that we care about.
+         # But what if one below has a steep slope?! This won't work or matter!
+         # Just see what unit you are in and find the connection along this line
+         # with the next one up
+      # Build a line up from z_ch
+      for i in range(len(lith)):
+        for segment in range(len(lith[i]-1)):
+          intercept = 
+      # Ignore sediments for now
+      
+      
+      intersection
+      
+      
+      
+      
+      # MUST acknowledge off-calculation finite channel width, b: valley
+      # width *never* 0. 
+      
+      # Then can have functions for the differnet options on how to do things
+      # like:
+      
+      def Channel_Touching_Side_Braided_Random_Position(self):
+        """
+        After Wickert et al. (2013), JGR.
+        Channel position in cross-stream sense is random
+        (see also note by Bradley and Tucker -- small valley width, this is 
+        OK for meandering streams too)
+        """
+        # Remember that valley width = 2x what we have on model, + b
+        # B_mod = flat valley bottom width -- get this somehow -- what about 
+        # gradual incision issues though -- should keep affecting walls for some time!
+        # Yeah, lateral migration into sloping surface issue.
+        B = 2*B_mod + b
+        # So always touching wall when B = b, no excess valley width
+        self.Pch = b/B
+
+
+
+
+  # For width relationship, Wickert et al. (2013) found that on braidplains
+  # with no internal terraces (these presumed to cauase deviations from fit),
+  # river position must be random b/c exponential decay shape to pixels 
+  # visited. (Not so for meandering case: is power law around center -- 
+  # see Nate Bradley and Greg Tucker's paper.
+  # So I can assume braided and say contact with wall goes as 
+  # 1/(b-B) or something like this, but noting that b does go up (though 
+  # therefore power at contact goes down -- ooh, write an equation for this 
+  # too) 
+  # And then lower chance of contact with wall for meandering? How long will
+  # channel stay against walls -- will it be pushed against them b/c it wants 
+  # to have a more free floodplain? (Personifying, I know :) )
+  # Check Nate's paper. For now, use my braided approx.
+
+    
+
+
+
+
+
+
+
+
+
+
+
 
   # START OUT BY WRITING SEPARATE INCISION AND AGGRADATION ALGORITHMS FOR 
   # SIMPLICITY. MAY EVENTUALLY BECOME PART OF THE SAME FUNCTION, OR AT LEAST
@@ -95,3 +196,29 @@ programming being the prerequisite, of course!
     for a possible third layer that will grow in time -- loose regolith.
     """
     pass
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
