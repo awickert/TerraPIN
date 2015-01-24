@@ -200,9 +200,45 @@ programming being the prerequisite, of course!
     
     
     
+  # Utility functions
+  def evaluatePiecewiseLinear(self, x, pwl)  
+    """
+    Evaluates a piecewise linear expression to solve for z at a given x.
+    x:   the x-value
+    pwl: a 2-column numpy array, ([x, z]), that must contain at least
+         four entries (two points define a line)
+    """
     
+    # First, define line segment of interest
+    # No internal error handling -- will just let it crash if the point
+    # is outside the reach of the piecewise linear segment
+    xmin_pwl = np.max( pwl[:,0] <= x )
+    xmax_pwl = np.min( pwl[:,0] >= x )
+    z_xmin_pwl = pwl[:,1][pwl[:,0] == xmin_pwl]
+    z_xmax_pwl = pwl[:,1][pwl[:,0] == xmax_pwl]
     
-    
+    # In case the point is at intersection of two segments, just give it 
+    # the known z-value
+    # (this could have been avoided by using < and >= instead of <= and >=,
+    # but then that could cause problems of the point to be selected were 
+    # on the edge of the domain but still hanging on to the last defined 
+    # point
+    if xlim_pwl == xmax_pwl:
+      # In this case, z_xmin_pwl and z_xmax_pwl are defined to be the same,
+      # so just pick one
+      z = z_xmin_pwl
+    else
+      # define the line given by the segment endpoints
+      # z = mx + b 
+      # slope
+      m = (z_xmax_pwl - z_xmin_pwl)/(xmax_pwl - xmin_pwl)
+      # intercept -- could equally calculate with x_max
+      b = z_xmin_pwl - m*xmin_pwl
+      # Now can compute z
+      z = m*x + b
+      
+    return z
+
     
     
     
