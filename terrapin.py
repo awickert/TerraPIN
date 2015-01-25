@@ -7,16 +7,16 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 class Terrapin(object):
-"""
-Terrapin (or TerraPIN) stands for "Terraces put into Numerics". It is a module 
-that generates the expected terraces, both strath and fill, from prescribed 
-river aggradation and degradation (incision).
+  """
+  Terrapin (or TerraPIN) stands for "Terraces put into Numerics". It is a module 
+  that generates the expected terraces, both strath and fill, from prescribed 
+  river aggradation and degradation (incision).
 
-It works on a single river cross-section, and is meant to include both bedrock 
-and alluvium, and in theory should be able to contain as many layers as it 
-likes with different material properties ... with some well-organized 
-programming being the prerequisite, of course!
-"""
+  It works on a single river cross-section, and is meant to include both bedrock 
+  and alluvium, and in theory should be able to contain as many layers as it 
+  likes with different material properties ... with some well-organized 
+  programming being the prerequisite, of course!
+  """
 
   # HIGH-LEVEL CORE FUNCTIONS
   def __init__(self):
@@ -39,9 +39,7 @@ programming being the prerequisite, of course!
     Early stages of development!
     """
     # elevation of the channel bedrock surface at the starting time
-    z_ch_br = 0
-    # elevation of the channel alluvial surface at the starting time
-    z_sed = 0
+    self.z_br_ch = -60.
     # ASSUMING FOR NOW THAT IT STARTS ON A FLAT PLANE, AND SOMEHOW IS NOT
     # CAUSING AN ERROR -- ACTUALLY, THIS WILL BE SOMETHING ON THE TO-DO LIST:
     # NORMALLY HAVE UNIFORM AGGRADATION ACROSS VALLEY, BUT ALLOW IT TO GO OVER 
@@ -62,12 +60,12 @@ programming being the prerequisite, of course!
     # Erodibility coefficient of alluvium
     k_a = 1E-2
     # Erodibility coefficient of bedrock
-    K_r = 1E-4
+    k_r = 1E-4
     # Surface elevation profiles -- start out flat
     # bedrock (x,z)
-    self.z_br = np.array([[-np.inf, 0], [0, 0]])
+    z_br = np.array([[-np.inf, 0], [0, 0]])
     # sediment (x,z)
-    self.z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
+    z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
     # Define channel width at this point
     self.b = 50 # [m]
     # And the channel will start out the same width as its bedrock-valley
@@ -151,49 +149,63 @@ programming being the prerequisite, of course!
     # AND/OR I WONDER IF IT WOULD BE POSSIBLE TO PREEMPTIVELY SUM THE ERODIBILITIES 
     # AND SLOPE LENGTHS OF ALL LAYERS ABOVE A POINT -- SLOPE LENGTHS YES, BUT IF LAYERS 
     # ARE NON-HORIZONTAL AT THEIR BASE (E.G., ALLUVIUM), THEN WOULD HAVE TO ITERATE ANYWAY
-    point = np.array([0, z_br_ch])
+    point = np.array([0, self.z_br_ch])
+    # And layer_updates holds new points that modify layers until the end,
+    # when we are ready to update the whole system all at once
+    layer_updates = []
     
-    while point:
+    while point is not None:
       inLayer = self.insideWhichLayer(point)
-      angleOfRepose = self.alpha[inlayer]
-      # Slope -- minus because solving for what is left of river
-      m = - tan(angleOfRepose)
-      # Intercept
-      b = point[1] - m*point[0]
-      # Find intersection with each layer
-      intersection = []
-      for i in self.layer_numbers:
-        # list of 1D numpy arrays
-        intersection.append(findIntersection, m, b, self.layer_tops[i])
-      # turn it into a 2D array from a 1D list of 1D arrays
-      intersection = np.array(intersection)
-      # Define the chosen intersection
-      chosen_intersection = intersection.copy()
-      # First, use only those points are above the point in question
-      intersection[intersection[:,1] <= point[1]] = np.nan
-      # if nothing above, then we are at the top
-      if np.isnan(intersection).all():
-        # Break out of loop
-        point = None
-      else:
-        # Find the path lengths to these intersections
-        path_lengths = ( (intersection[:,0] - point[0])**2 \
-                       + (intersection[:,1] - point[1])**2 )
-        # And of these nonzero paths, find the shortest, and this is the
-        # chosen intersection
-        # Chosen layer number will work here because self.layer_numbers is
-        # ordered just by a np.arange (so same)
-        chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
-        chosen_intersection = intersection[chosen_layer_number]
-        layer_updates.append(chosen_layer_number, chosen_intersection)
-      # Wait until the end to update the cross-sectional profile
-      for update_item in layer_updates:
-        number = update_item[0]
-        intersect = update_item[1]
-        # Then add this into the proper layer
-        self.layer_tops[number] = np.vstack(self.layer_tops[i], np.expand_dims[intersect, 0])
-        # And sort it in order of increasing x so it is at the proper point
-        self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+      # if inLayer is none, it must be above all layers.
+      # then break out of loop at end
+      # POSSIBLE THAT PROBLEM WILL BE CAUSED BY HAVING POINTS ALSO BE ABLE TO
+      # BE ON TOP OF LAYERS
+      if inLayer is not None:
+        angleOfRepose = self.alpha[inLayer]
+        # Slope -- minus because solving for what is left of river
+        m = - np.tan( (np.pi/180.) * angleOfRepose)
+        # Intercept
+        b = point[1] - m*point[0]
+        # Find intersection with each layer
+        intersection = []
+        for i in self.layer_numbers:
+          # list of 1D numpy arrays
+          intersection.append(self.findIntersection(m, b, self.layer_tops[i]))
+        # turn it into a 2D array from a 1D list of 1D arrays
+        intersection = np.array(intersection)
+        # Define the chosen intersection
+        chosen_intersection = intersection.copy()
+        # First, use only those points are above the point in question
+        intersection[intersection[:,1] <= point[1]] = np.nan
+        # if nothing above, then we are at the top
+        if np.isnan(intersection).all():
+          # Break out of loop
+          point = None
+        else:
+          # Find the path lengths to these intersections
+          path_lengths = ( (intersection[:,0] - point[0])**2 \
+                         + (intersection[:,1] - point[1])**2 )
+          # And of these nonzero paths, find the shortest, and this is the
+          # chosen intersection
+          # Chosen layer number will work here because self.layer_numbers is
+          # ordered just by a np.arange (so same)
+          chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
+          chosen_intersection = intersection[chosen_layer_number]
+          layer_updates.append([chosen_layer_number, chosen_intersection])
+          # Now note that chosen_intersection is the new starting point
+          point = chosen_intersection.copy()
+      point = None
+    
+    # Wait until the end to update the cross-sectional profile
+    for i in range(len(layer_updates)):
+      number = layer_updates[i][0]
+      intersect = layer_updates[i][1]
+      # Then add this into the proper layer
+      self.layer_tops[number] = np.vstack(( self.layer_tops[i], np.expand_dims(intersect, 0) ))
+      # And sort it in order of increasing x so it is at the proper point
+      self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+              
+    print self.layer_tops
     
   def findIntersection(self, m, b, piecewiseLinear):
     """
@@ -203,14 +215,18 @@ programming being the prerequisite, of course!
     piecewise linear for geological layer top
     """
     intersection = None
-    for i in range(len(piecewiseLinear)):
+    for i in range(len(piecewiseLinear)-1):
       # Piecewise linear preparation
       # Because of sorting, xy0 is always < xy1
       xy0 = piecewiseLinear[i]
       xy1 = piecewiseLinear[i+1]
       # slope and intercept
-      m_pwl = (xy1[1] - xy0[1])/(xy1[0]-xy0[0])
-      b_pwl = xy0[1] - m_pwl * xy0[0]
+      if np.isinf(xy1[1]) or np.isinf(xy0[1]):
+        m_pwl = np.nan
+        b_pwl = np.nan
+      else:
+        m_pwl = (xy1[1] - xy0[1])/(xy1[0]-xy0[0])
+        b_pwl = xy1[1] - m_pwl * xy1[0] # use xy1 to avoid inf
       # Then find the intersection with the line
       # x-value first
       xint = (b_pwl - b)/(m - m_pwl)
@@ -221,11 +237,14 @@ programming being the prerequisite, of course!
         # y-value plugging into one equations -- let's use the line from the 
         # starting point that is producing the erosion
         yint = m*xint + b
-        intersection = np.array([xint, yint])
+        # Because there is some numerical error created by defining yint
+        # with such an equation let's add a rounding term: round to nearest
+        # 1E-9 m (nanometer) -- because totally insignificant in these systems
+        intersection = np.round(np.array([xint, yint]), 9)
         break
     # If at the end of the loop, nothing has been found, 
     # replace it with np.nan
-    if intersection:
+    if intersection is not None:
       pass
     else:
       intersection = np.array([np.nan, np.nan])
@@ -266,7 +285,7 @@ programming being the prerequisite, of course!
     
     
   # Utility functions
-  def piecewiseLinearAtX(self, x, pwl)  
+  def piecewiseLinearAtX(self, x, pwl):
     """
     Evaluates a piecewise linear expression to solve for z at a given x.
     x:   the x-value
@@ -279,21 +298,21 @@ programming being the prerequisite, of course!
       z = np.nan
     else:
       # First, define line segment of interest
-      xmin_pwl = np.max( pwl[:,0] <= x )
-      xmax_pwl = np.min( pwl[:,0] >= x )
-      z_xmin_pwl = pwl[:,1][pwl[:,0] == xmin_pwl]
-      z_xmax_pwl = pwl[:,1][pwl[:,0] == xmax_pwl]
+      xmin_pwl = np.max( pwl[0][pwl[:,0] <= x] )
+      xmax_pwl = np.min( pwl[0][pwl[:,0] >= x] )
+      z_xmin_pwl = float(pwl[:,1][pwl[:,0] == xmin_pwl])
+      z_xmax_pwl = float(pwl[:,1][pwl[:,0] == xmax_pwl])
       # In case the point is at intersection of two segments, just give it 
       # the known z-value
       # (this could have been avoided by using < and >= instead of <= and >=,
       # but then that could cause problems of the point to be selected were 
       # on the edge of the domain but still hanging on to the last defined 
       # point
-      if xlim_pwl == xmax_pwl:
+      if xmin_pwl == xmax_pwl:
         # In this case, z_xmin_pwl and z_xmax_pwl are defined to be the same,
         # so just pick one
         z = z_xmin_pwl
-      else
+      else:
         # define the line given by the segment endpoints
         # z = mx + b 
         # slope
@@ -305,7 +324,7 @@ programming being the prerequisite, of course!
       
     return z
     
-  def insideWhichLayer(self, point)
+  def insideWhichLayer(self, point):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -321,36 +340,36 @@ programming being the prerequisite, of course!
     
     layer_elevations_at_point = []
     for i in range(len(self.layer_tops)):
-      layer_elevations_at_point.append(piecewiseLinearAtX(point[0], self.layer_tops[i])
+      layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], self.layer_tops[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
-    # Lowest elevation above point
-    layer_elevation_point_is_inside = np.min(layer_elevations_at_point > point[1])
+
+    # Find lowest elevation above point
+    layers_above_point = layer_elevations_at_point > point[1]
+    if layers_above_point.any():
+      layer_elevation_point_is_inside = layer_elevations_at_point[layers_above_point]
     # while I see the main use of this as checking for incision, thereby 
     # making these next statements not needed, I will check if the point is
     # at or above the highest layer
-    if len(layer_elevation_point_is_inside) == 0:
-      layer_elevation_point_is_inside = np.min(layer_elevations_at_point >= point[1])
-    # If neither of these, must be above everything
-    else
-      layer_elevation_point_is_inside = None
-      layer_number = np.nan
+    # MAYBE CUTOFF HERE WITH OPTION SO WE DON'T RETURN LAYER TOPS WHEN YOU REALLY
+    # WANT TO KNOW WHAT YOU'RE INSIDE, ONLY.
+    else:
+      layers_at_or_above_point = layer_elevations_at_point >= point[1]
+      if layers_at_or_above_point.any():
+        layer_elevation_point_is_inside = layer_elevations_at_point[layers_at_or_above_point]
+      else:
+        # If neither of these, must be above everything
+        layer_elevation_point_is_inside = None
+        layer_number = None
       
-    if layer_elevation_point_is_inside:
+    if layer_elevation_point_is_inside is not None:
       layer_number = self.layer_numbers[layer_elevations_at_point == layer_elevation_point_is_inside]
+      layer_number = int(layer_number)
     
     return layer_number
-      
     
 
-    # Intersection-finding
-  def findIntersection(self):
-    """
-    Find intersection between two lines
-    """
-    
-  
-  
-  
+
+  """
     dz_ch__dt = -2.
     
     for t in [1]:
@@ -377,7 +396,7 @@ programming being the prerequisite, of course!
       
       
       intersection
-      
+  """    
       
 
     
