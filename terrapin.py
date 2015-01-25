@@ -71,14 +71,19 @@ programming being the prerequisite, of course!
     # Must exist above bedrock.
     # So all units must be in order from bottom to top.
     # But none exists now! Hm, have to think.
+    # YES, HAVE THIS JUST BE LAYER TOP, STARTS AT JUST -INF, -INF, AND THEN
+    # BECOMES FINITE WHEN IT NEEDS TO BE
+    # OR STARTS AS NOTHING!
     eta = np.array([[-np.inf, 0], [0, 0]])
     
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
-    alpha = [alpha_r, alpha_a]
-    k = [k_r, k_a]
-    lith = [z_br, eta]
+    self.alpha = [alpha_r, alpha_a]
+    self.k = [k_r, k_a]
+    self.layer_tops = [z_br, eta]
+    self.layer_names = ['bedrock', 'alluvium']
+    self.layer_numbers = np.arange(len(self.layer_tops))
     
     # Intersection-finding
     
@@ -201,7 +206,7 @@ programming being the prerequisite, of course!
     
     
   # Utility functions
-  def evaluatePiecewiseLinear(self, x, pwl)  
+  def piecewiseLinearAtX(self, x, pwl)  
     """
     Evaluates a piecewise linear expression to solve for z at a given x.
     x:   the x-value
@@ -238,7 +243,43 @@ programming being the prerequisite, of course!
       z = m*x + b
       
     return z
-
+    
+  def whichLayer(self, point)
+    """
+    Point is (x,z)
+    This script will return which layer the point is in.
+    Because it is used to find which angle is the proper angle of repose
+    for the rock/sediment/soil/etc. above, if it is on the border between
+    two units, it will pick the upper one.
+    
+    The importance of this script lies in the fact that each time the river 
+    incises, the point will end up in the ground, and will have to project out 
+    of that. In plausible cases, it might end up projecting back up through 
+    multiple materials.
+    """
+    
+    layer_elevations_at_point = []
+    for i in range(len(self.layer_tops)):
+      layer_elevations_at_point.append(piecewiseLinearAtX(point[0], self.layer_tops[i])
+    layer_elevations_at_point = np.array(layer_elevations_at_point)
+    # Lowest elevation above point
+    layer_elevation_point_is_inside = np.min(layer_elevations_at_point > point[1])
+    layer_number = layer_elevations_at_point
+    # while I see the main use of this as checking for incision, thereby 
+    # making these next statements not needed, I will check if the point is
+    # at or above the highest layer
+    if len(layer_elevation_point_is_inside) == 0:
+      layer_elevation_point_is_inside = np.min(layer_elevations_at_point >= point[1])
+    # If neither of these, must be above everything
+    else
+      layer_elevation_point_is_inside = None
+    
+    return layer_elevation_point_is_inside
+      
+  # Treat alluvium aggradation as distinctly different: just fills space
+  # up to certain level. If < max elevation of alluvium, draw a new line 
+  # (horizontal) and snap new points... otherwise it will be just 
+    
     
     
     
