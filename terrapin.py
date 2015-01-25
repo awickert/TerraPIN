@@ -146,6 +146,11 @@ programming being the prerequisite, of course!
     When collapse of bedrock does happen, it creates an angle-of-repose pile
     of sediments in the real world. Represent this in some way?
     """
+    # THINK THAT IF I CHANGE THE POINT HERE, I CAN GENERALIZE THIS TO LATERAL EROSION OF TERRACES AS WELL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # BUT THEN WOULD NEED TO REMOVE THE IMMEDIATE UPDATING STEP TO ADD AN ITERATION FOR LAYERS ABOVE THE LAYER IN QUESTION -- DIFFERENT ERODIBILITIES AND SLOPE LENGTHS
+    # AND/OR I WONDER IF IT WOULD BE POSSIBLE TO PREEMPTIVELY SUM THE ERODIBILITIES 
+    # AND SLOPE LENGTHS OF ALL LAYERS ABOVE A POINT -- SLOPE LENGTHS YES, BUT IF LAYERS 
+    # ARE NON-HORIZONTAL AT THEIR BASE (E.G., ALLUVIUM), THEN WOULD HAVE TO ITERATE ANYWAY
     point = np.array([0, z_br_ch])
     
     while point:
@@ -159,7 +164,7 @@ programming being the prerequisite, of course!
       intersection = []
       for i in self.layer_numbers:
         # list of 1D numpy arrays
-        intersection.append(findIntersection, m, b, self.layer_tops[i]
+        intersection.append(findIntersection, m, b, self.layer_tops[i])
       # turn it into a 2D array from a 1D list of 1D arrays
       intersection = np.array(intersection)
       # Define the chosen intersection
@@ -185,8 +190,9 @@ programming being the prerequisite, of course!
       for update_item in layer_updates:
         number = update_item[0]
         intersect = update_item[1]
-        # Then add this into the proper layer at the proper point (along x)
+        # Then add this into the proper layer
         self.layer_tops[number] = np.vstack(self.layer_tops[i], np.expand_dims[intersect, 0])
+        # And sort it in order of increasing x so it is at the proper point
         self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
     
   def findIntersection(self, m, b, piecewiseLinear):
@@ -196,22 +202,35 @@ programming being the prerequisite, of course!
     erosion
     piecewise linear for geological layer top
     """
-    
+    intersection = None
+    for i in range(len(piecewiseLinear)):
+      # Piecewise linear preparation
+      # Because of sorting, xy0 is always < xy1
+      xy0 = piecewiseLinear[i]
+      xy1 = piecewiseLinear[i+1]
+      # slope and intercept
+      m_pwl = (xy1[1] - xy0[1])/(xy1[0]-xy0[0])
+      b_pwl = xy0[1] - m_pwl * xy0[0]
+      # Then find the intersection with the line
+      # x-value first
+      xint = (b_pwl - b)/(m - m_pwl)
+      # Next, see if the point exists
+      # >= and <= to end on the first one it hits
+      if (xint >= xy0[0]) and (xint <= xy1[0]):
+        # You're done!
+        # y-value plugging into one equations -- let's use the line from the 
+        # starting point that is producing the erosion
+        yint = m*xint + b
+        intersection = np.array([xint, yint])
+        break
+    # If at the end of the loop, nothing has been found, 
+    # replace it with np.nan
+    if intersection:
+      pass
+    else:
+      intersection = np.array([np.nan, np.nan])
 
-    
-
-
-
-    for layer in lith:
-    # Build a line up from z_ch
-    for i in range(len(lith)):
-      for segment in range(len(lith[i]-1)):
-        intercept = 
-    
-    # Return intersection as nan if it doesn't exist
-    
-    
-    intersection
+    return intersection
 
   def erode_laterally(self):
     # Might get complicated when everything isn't at just one elevation, h,
