@@ -39,9 +39,9 @@ programming being the prerequisite, of course!
     Early stages of development!
     """
     # elevation of the channel bedrock surface at the starting time
-    z_ch = 0
+    z_ch_br = 0
     # elevation of the channel alluvial surface at the starting time
-    eta = 0
+    z_sed = 0
     # ASSUMING FOR NOW THAT IT STARTS ON A FLAT PLANE, AND SOMEHOW IS NOT
     # CAUSING AN ERROR -- ACTUALLY, THIS WILL BE SOMETHING ON THE TO-DO LIST:
     # NORMALLY HAVE UNIFORM AGGRADATION ACROSS VALLEY, BUT ALLOW IT TO GO OVER 
@@ -65,78 +65,46 @@ programming being the prerequisite, of course!
     K_r = 1E-4
     # Surface elevation profiles -- start out flat
     # bedrock (x,z)
-    z_br = np.array([[-np.inf, 0], [0, 0]])
-    # sediment (x,z) -- actually, this would be surface elevation
-    # Does sediment just exist in a little area or across the entire thing?
-    # Must exist above bedrock.
-    # So all units must be in order from bottom to top.
-    # But none exists now! Hm, have to think.
-    # YES, HAVE THIS JUST BE LAYER TOP, STARTS AT JUST -INF, -INF, AND THEN
-    # BECOMES FINITE WHEN IT NEEDS TO BE
-    # OR STARTS AS NOTHING!
-    eta = np.array([[-np.inf, 0], [0, 0]])
+    self.z_br = np.array([[-np.inf, 0], [0, 0]])
+    # sediment (x,z)
+    self.z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
+    # Define channel width at this point
+    self.b = 50 # [m]
+    # And the channel will start out the same width as its bedrock-valley
+    self.B = 50 # [m]
     
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
     self.alpha = [alpha_r, alpha_a]
     self.k = [k_r, k_a]
-    self.layer_tops = [z_br, eta]
+    self.layer_tops = [z_br, z_sed]
     self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
     
-    # Intersection-finding
     
-    dz_ch__dt = -2.
     
-    for t in [1]:
-      z_ch += dz_ch__dt
-      # In what material does the base of the channel lie?
-      # Easy since channel is at 0
-      # And what are all the layers above?
-      layer_bases = []
-      # Going to assume for now that the layers always stay in the same order
-      # and go from the bottom to the top
-      for layer in lith:
-        layer_bases.append(layer[-1,-1]) # Fix this to calculate those 
-                                         # values at chosen x
-                                         # can write a function to do this
-         # Then can find those above the point that we care about.
-         # But what if one below has a steep slope?! This won't work or matter!
-         # Just see what unit you are in and find the connection along this line
-         # with the next one up
-      # Build a line up from z_ch
-      for i in range(len(lith)):
-        for segment in range(len(lith[i]-1)):
-          intercept = 
-      # Ignore sediments for now
-      
-      
-      intersection
-      
-      
-      
-      
-      # MUST acknowledge off-calculation finite channel width, b: valley
-      # width *never* 0. 
-      
-      # Then can have functions for the differnet options on how to do things
-      # like:
-      
-      def Channel_Touching_Side_Braided_Random_Position(self):
-        """
-        After Wickert et al. (2013), JGR.
-        Channel position in cross-stream sense is random
-        (see also note by Bradley and Tucker -- small valley width, this is 
-        OK for meandering streams too)
-        """
-        # Remember that valley width = 2x what we have on model, + b
-        # B_mod = flat valley bottom width -- get this somehow -- what about 
-        # gradual incision issues though -- should keep affecting walls for some time!
-        # Yeah, lateral migration into sloping surface issue.
-        B = 2*B_mod + b
-        # So always touching wall when B = b, no excess valley width
-        self.Pch = b/B
+    
+  # MUST acknowledge off-calculation finite channel width, b: valley
+  # width *never* 0. 
+  
+  # Then can have functions for the differnet options on how to do things
+  # like:
+  
+  def Channel_Touching_Side_Braided_Random_Position(self):
+    """
+    After Wickert et al. (2013), JGR.
+    Channel position in cross-stream sense is random
+    (see also note by Bradley and Tucker -- small valley width, this is 
+    OK for meandering streams too)
+    """
+    # Remember that valley width = 2x what we have on model, + b
+    # B_mod = flat valley bottom width -- get this somehow -- what about 
+    # gradual incision issues though -- should keep affecting walls for some time!
+    # Yeah, lateral migration into sloping surface issue.
+    B = 2*B_mod + b
+    # So always touching wall when B = b, no excess valley width
+    self.Pch = b/B
 
 
 
@@ -178,6 +146,76 @@ programming being the prerequisite, of course!
     When collapse of bedrock does happen, it creates an angle-of-repose pile
     of sediments in the real world. Represent this in some way?
     """
+    point = np.array([0, z_br_ch])
+    
+    while point:
+      inLayer = self.insideWhichLayer(point)
+      angleOfRepose = self.alpha[inlayer]
+      # Slope -- minus because solving for what is left of river
+      m = - tan(angleOfRepose)
+      # Intercept
+      b = point[1] - m*point[0]
+      # Find intersection with each layer
+      intersection = []
+      for i in self.layer_numbers:
+        # list of 1D numpy arrays
+        intersection.append(findIntersection, m, b, self.layer_tops[i]
+      # turn it into a 2D array from a 1D list of 1D arrays
+      intersection = np.array(intersection)
+      # Define the chosen intersection
+      chosen_intersection = intersection.copy()
+      # First, use only those points are above the point in question
+      intersection[intersection[:,1] <= point[1]] = np.nan
+      # if nothing above, then we are at the top
+      if np.isnan(intersection).all():
+        # Break out of loop
+        point = None
+      else:
+        # Find the path lengths to these intersections
+        path_lengths = ( (intersection[:,0] - point[0])**2 \
+                       + (intersection[:,1] - point[1])**2 )
+        # And of these nonzero paths, find the shortest, and this is the
+        # chosen intersection
+        # Chosen layer number will work here because self.layer_numbers is
+        # ordered just by a np.arange (so same)
+        chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
+        chosen_intersection = intersection[chosen_layer_number]
+        layer_updates.append(chosen_layer_number, chosen_intersection)
+      # Wait until the end to update the cross-sectional profile
+      for update_item in layer_updates:
+        number = update_item[0]
+        intersect = update_item[1]
+        # Then add this into the proper layer at the proper point (along x)
+        self.layer_tops[number] = np.vstack(self.layer_tops[i], np.expand_dims[intersect, 0])
+        self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+    
+  def findIntersection(self, m, b, piecewiseLinear):
+    """
+    Find intersection between two lines.
+    m, b for slope coming up from river or slope above river and causing 
+    erosion
+    piecewise linear for geological layer top
+    """
+    
+
+    
+
+
+
+    for layer in lith:
+    # Build a line up from z_ch
+    for i in range(len(lith)):
+      for segment in range(len(lith[i]-1)):
+        intercept = 
+    
+    # Return intersection as nan if it doesn't exist
+    
+    
+    intersection
+
+  def erode_laterally(self):
+    # Might get complicated when everything isn't at just one elevation, h,
+    # or isn't just one material.
     pass
 
   def aggrade(self):
@@ -185,8 +223,11 @@ programming being the prerequisite, of course!
     Fill up area within the valley with sediment (or disperse sediment 
     over some distance on a flat plain? Or just error/quit in that case?
     """
+    # Treat alluvium aggradation as distinctly different: just fills space
+    # up to certain level. If < max elevation of alluvium, draw a new line 
+    # (horizontal) and snap new points... otherwise it will be just 
     pass
-
+    
   def linemesh(self):
     """
     Something like this is likely to take the job of "aggrade" and "incise"
@@ -214,37 +255,38 @@ programming being the prerequisite, of course!
          four entries (two points define a line)
     """
     
-    # First, define line segment of interest
-    # No internal error handling -- will just let it crash if the point
-    # is outside the reach of the piecewise linear segment
-    xmin_pwl = np.max( pwl[:,0] <= x )
-    xmax_pwl = np.min( pwl[:,0] >= x )
-    z_xmin_pwl = pwl[:,1][pwl[:,0] == xmin_pwl]
-    z_xmax_pwl = pwl[:,1][pwl[:,0] == xmax_pwl]
-    
-    # In case the point is at intersection of two segments, just give it 
-    # the known z-value
-    # (this could have been avoided by using < and >= instead of <= and >=,
-    # but then that could cause problems of the point to be selected were 
-    # on the edge of the domain but still hanging on to the last defined 
-    # point
-    if xlim_pwl == xmax_pwl:
-      # In this case, z_xmin_pwl and z_xmax_pwl are defined to be the same,
-      # so just pick one
-      z = z_xmin_pwl
-    else
-      # define the line given by the segment endpoints
-      # z = mx + b 
-      # slope
-      m = (z_xmax_pwl - z_xmin_pwl)/(xmax_pwl - xmin_pwl)
-      # intercept -- could equally calculate with x_max
-      b = z_xmin_pwl - m*xmin_pwl
-      # Now can compute z
-      z = m*x + b
+    # First check if z(x) not defined for this line.
+    if x < np.min(pwl[:,0]) or x > np.max(pwl[:,0]):
+      z = np.nan
+    else:
+      # First, define line segment of interest
+      xmin_pwl = np.max( pwl[:,0] <= x )
+      xmax_pwl = np.min( pwl[:,0] >= x )
+      z_xmin_pwl = pwl[:,1][pwl[:,0] == xmin_pwl]
+      z_xmax_pwl = pwl[:,1][pwl[:,0] == xmax_pwl]
+      # In case the point is at intersection of two segments, just give it 
+      # the known z-value
+      # (this could have been avoided by using < and >= instead of <= and >=,
+      # but then that could cause problems of the point to be selected were 
+      # on the edge of the domain but still hanging on to the last defined 
+      # point
+      if xlim_pwl == xmax_pwl:
+        # In this case, z_xmin_pwl and z_xmax_pwl are defined to be the same,
+        # so just pick one
+        z = z_xmin_pwl
+      else
+        # define the line given by the segment endpoints
+        # z = mx + b 
+        # slope
+        m = (z_xmax_pwl - z_xmin_pwl)/(xmax_pwl - xmin_pwl)
+        # intercept -- could equally calculate with x_max
+        b = z_xmin_pwl - m*xmin_pwl
+        # Now can compute z
+        z = m*x + b
       
     return z
     
-  def whichLayer(self, point)
+  def insideWhichLayer(self, point)
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -264,7 +306,6 @@ programming being the prerequisite, of course!
     layer_elevations_at_point = np.array(layer_elevations_at_point)
     # Lowest elevation above point
     layer_elevation_point_is_inside = np.min(layer_elevations_at_point > point[1])
-    layer_number = layer_elevations_at_point
     # while I see the main use of this as checking for incision, thereby 
     # making these next statements not needed, I will check if the point is
     # at or above the highest layer
@@ -273,28 +314,53 @@ programming being the prerequisite, of course!
     # If neither of these, must be above everything
     else
       layer_elevation_point_is_inside = None
-    
-    return layer_elevation_point_is_inside
+      layer_number = np.nan
       
-  # Treat alluvium aggradation as distinctly different: just fills space
-  # up to certain level. If < max elevation of alluvium, draw a new line 
-  # (horizontal) and snap new points... otherwise it will be just 
+    if layer_elevation_point_is_inside:
+      layer_number = self.layer_numbers[layer_elevations_at_point == layer_elevation_point_is_inside]
     
+    return layer_number
+      
     
+
+    # Intersection-finding
+  def findIntersection(self):
+    """
+    Find intersection between two lines
+    """
     
+  
+  
+  
+    dz_ch__dt = -2.
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    for t in [1]:
+      z_ch += dz_ch__dt
+      # In what material does the base of the channel lie?
+      # Easy since channel is at 0
+      # And what are all the layers above?
+      layer_bases = []
+      # Going to assume for now that the layers always stay in the same order
+      # and go from the bottom to the top
+      for layer in lith:
+        layer_bases.append(layer[-1,-1]) # Fix this to calculate those 
+                                         # values at chosen x
+                                         # can write a function to do this
+         # Then can find those above the point that we care about.
+         # But what if one below has a steep slope?! This won't work or matter!
+         # Just see what unit you are in and find the connection along this line
+         # with the next one up
+      # Build a line up from z_ch
+      for i in range(len(lith)):
+        for segment in range(len(lith[i]-1)):
+          intercept = 
+      # Ignore sediments for now
+      
+      
+      intersection
+      
+      
+
     
     
     
