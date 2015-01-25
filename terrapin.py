@@ -28,9 +28,7 @@ class Terrapin(object):
   def update(self):
     # no alluviation yet
     self.incise()
-    self.removeOldVertices()
     self.erode_laterally()
-    self.removeOldVertices()
 
   def finalize(self):
     pass
@@ -78,6 +76,11 @@ class Terrapin(object):
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
+    #self.alpha = [40., alpha_r, alpha_a]
+    #self.k = [1E-2, k_r, k_a]
+    #self.layer_tops = [z_br - 30., z_br, z_sed]
+    #self.layer_names = ['bedrock2', 'bedrock', 'alluvium']
+    #self.layer_numbers = np.arange(len(self.layer_tops))
     self.alpha = [alpha_r, alpha_a]
     self.k = [k_r, k_a]
     self.layer_tops = [z_br, z_sed]
@@ -165,6 +168,8 @@ class Terrapin(object):
       # POSSIBLE THAT PROBLEM WILL BE CAUSED BY HAVING POINTS ALSO BE ABLE TO
       # BE ON TOP OF LAYERS
       if inLayer is not None:
+        if len(layer_updates) == 0:
+          layer_updates.append([inLayer, point.copy()])
         angleOfRepose = self.alpha[inLayer]
         # Slope -- minus because solving for what is left of river
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -205,11 +210,24 @@ class Terrapin(object):
       number = layer_updates[i][0]
       intersect = layer_updates[i][1]
       # Then add this into the proper layer
-      self.layer_tops[number] = np.vstack(( self.layer_tops[i], np.expand_dims(intersect, 0) ))
+      print self.layer_tops[number]
+      self.layer_tops[number] = np.vstack(( self.layer_tops[number], np.expand_dims(intersect, 0) ))
+      print self.layer_tops[number]
+      # And remove those values above it -- vertices from pre-incision topography
+      # Each intersect is origin for next shot, in turn, so that makes things easier.
+      # Can't use river as intersect #1 because can't calculate an appropriate slope
+      #if i == 0:
+      #  self.removeOldVertices(np.array([0, self.z_br_ch]), intersect, number)
+      #else:
+      #  self.removeOldVertices(layer_updates[i-1][1], intersect, number)
+      if i > 0:
+        self.removeOldVertices(layer_updates[i-1][1], intersect, number)
       # And sort it in order of increasing x so it is at the proper point
-      self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
-    # And after this, adjust the right-hand-sides of the layers to hit the river
-    self.cutLayersToRiver()
+    
+    for i in range(len(layer_updates)):
+      self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+      # And after this, adjust the right-hand-sides of the layers to hit the river
+      #self.cutLayersToRiver()
       
     print self.layer_tops
   
@@ -381,14 +399,35 @@ class Terrapin(object):
     
     return layer_number
     
-  def removeOldVertices(self):
+    
+  def removeRedundantVertices(self):
     """
     Think this will test slope on either side of each vertex, and if they
     are the same, will remove it.
-    This will then find out if there are old vertices that lie above the new
-    line. Not sure how to do this yet...
+    Not sure if it will be needed
     """
     pass
+  
+  def removeOldVertices(self, origin, intersection, layer_number):
+    """
+    This will then find out if there are old vertices that lie above the new
+    line. Just have to pass new line endpoints to it and the characteristics of 
+    the 
+    
+    intersection = new endpoint computed (x,z)
+    origin = "point" -- where the line shoots from (river or otherwise) (x,z)
+    layer_number = the number of the layer to edit!
+    """
+    
+    # First, define line segment of interest
+    # Know that origin will always be to the right -- more positive
+    m = (origin[1] - intersection[1]) / (origin[0] - intersection[0])
+    b = origin[1] - m*origin[0]
+    
+    # Then limit to where values are lower or equal
+    self.layer_tops[layer_number] = self.layer_tops[layer_number][self.layer_tops[layer_number][:,1] <= self.layer_tops[layer_number][:,0]*m + b]
+    
+    
   
   def store_layers(self):
     """
@@ -423,6 +462,20 @@ class Terrapin(object):
       
       
       intersection
+      
+      
+      
+      
+      
+      
+      
+      
+    xo = origin[0]
+    zo = origin[1]
+    xi = intersection[0]
+    zi = intersection[1]
+    
+
   """    
       
 
