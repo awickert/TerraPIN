@@ -26,7 +26,11 @@ class Terrapin(object):
     self.set_input_values()
 
   def update(self):
-    pass
+    # no alluviation yet
+    self.incise()
+    self.removeOldVertices()
+    self.erode_laterally()
+    self.removeOldVertices()
 
   def finalize(self):
     pass
@@ -204,9 +208,19 @@ class Terrapin(object):
       self.layer_tops[number] = np.vstack(( self.layer_tops[i], np.expand_dims(intersect, 0) ))
       # And sort it in order of increasing x so it is at the proper point
       self.layer_tops[number] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
-              
+    # And after this, adjust the right-hand-sides of the layers to hit the river
+    self.cutLayersToRiver()
+      
     print self.layer_tops
-    
+  
+  def cutLayersToRiver(self):
+    """
+    Ensure that the layers drop into the river.
+    """
+    for layer in self.layer_tops:
+      if layer[-1,-1] > self.z_br_ch:
+        layer[-1,-1] = self.z_br_ch
+  
   def findIntersection(self, m, b, piecewiseLinear):
     """
     Find intersection between two lines.
@@ -298,8 +312,8 @@ class Terrapin(object):
       z = np.nan
     else:
       # First, define line segment of interest
-      xmin_pwl = np.max( pwl[0][pwl[:,0] <= x] )
-      xmax_pwl = np.min( pwl[0][pwl[:,0] >= x] )
+      xmin_pwl = np.max( pwl[:,0][pwl[:,0] <= x] )
+      xmax_pwl = np.min( pwl[:,0][pwl[:,0] >= x] )
       z_xmin_pwl = float(pwl[:,1][pwl[:,0] == xmin_pwl])
       z_xmax_pwl = float(pwl[:,1][pwl[:,0] == xmax_pwl])
       # In case the point is at intersection of two segments, just give it 
@@ -367,7 +381,20 @@ class Terrapin(object):
     
     return layer_number
     
-
+  def removeOldVertices(self):
+    """
+    Think this will test slope on either side of each vertex, and if they
+    are the same, will remove it.
+    This will then find out if there are old vertices that lie above the new
+    line. Not sure how to do this yet...
+    """
+    pass
+  
+  def store_layers(self):
+    """
+    Save layers for visualization and analysis
+    """
+    pass
 
   """
     dz_ch__dt = -2.
