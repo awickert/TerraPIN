@@ -163,6 +163,7 @@ class Terrapin(object):
     
     while point is not None:
       inLayer = self.insideWhichLayer(point)
+      print inLayer
       # if inLayer is none, it must be above all layers.
       # then break out of loop at end
       # POSSIBLE THAT PROBLEM WILL BE CAUSED BY HAVING POINTS ALSO BE ABLE TO
@@ -170,6 +171,7 @@ class Terrapin(object):
       if inLayer is not None:
         if len(layer_updates) == 0:
           layer_updates.append([inLayer, point.copy()])
+          #layer_updates[0][1][1] += 1
         angleOfRepose = self.alpha[inLayer]
         # Slope -- minus because solving for what is left of river
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -210,9 +212,9 @@ class Terrapin(object):
       number = layer_updates[i][0]
       intersect = layer_updates[i][1]
       # Then add this into the proper layer
-      print self.layer_tops[number]
+      #print self.layer_tops[number]
       self.layer_tops[number] = np.vstack(( self.layer_tops[number], np.expand_dims(intersect, 0) ))
-      print self.layer_tops[number]
+      #print self.layer_tops[number]
       # And remove those values above it -- vertices from pre-incision topography
       # Each intersect is origin for next shot, in turn, so that makes things easier.
       # Can't use river as intersect #1 because can't calculate an appropriate slope
@@ -222,8 +224,15 @@ class Terrapin(object):
       #  self.removeOldVertices(layer_updates[i-1][1], intersect, number)
       if i > 0:
         self.removeOldVertices(layer_updates[i-1][1], intersect, number)
-      # And sort it in order of increasing x so it is at the proper point
-    
+      # Remove duplicates too, such as those that appear when there is 
+      # neither incision nor aggradation
+      # Following the answer at:
+      # http://stackoverflow.com/questions/8560440/removing-duplicate-columns-and-rows-from-a-numpy-2d-array
+      unique = np.unique(self.layer_tops[number].view([('', \
+               self.layer_tops[number].dtype)]*self.layer_tops[number].shape[1]))
+      self.layer_tops[number] = unique.view(self.layer_tops[number].dtype).reshape((unique.shape[0], self.layer_tops[number].shape[1]))
+     
+    # And sort it in order of increasing x so it is at the proper point
     for i in range(len(layer_updates)):
       self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
       # And after this, adjust the right-hand-sides of the layers to hit the river
@@ -285,8 +294,20 @@ class Terrapin(object):
 
   def erode_laterally(self):
     # Might get complicated when everything isn't at just one elevation, h,
-    # or isn't just one material.
-    pass
+    # or isn't just one material. In fact, will have to iterate, I think.
+    # But for now, keeping it simple
+    point = np.array([0, self.z_br_ch]) # Fix this in future to get edge of 
+                                        # valley wall
+    inLayer = self.insideWhichLayer(point)
+    # Valley width and probability of touching valley wall
+    B = 2*B_mod + b
+    Pch = b/B
+    # Hm, I think I might stop here. Lateral erosion will require the same
+    # get-point-and shoot tools as vertical erosion (so worth generalizing
+    # that), plus the possibility of iteration to an appropriate solution
+    # considering all the debris above -- and also thinking about how to 
+    # handle that
+    # So try multiple bedrock layers first, how about that?
 
   def aggrade(self):
     """
