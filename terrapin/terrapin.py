@@ -21,6 +21,11 @@ class Terrapin(object):
   # HIGH-LEVEL CORE FUNCTIONS
   def __init__(self):
     pass
+    
+  def main(self):
+    self.initialize()
+    self.update() # For some time -- really just placeholder at moment
+    self.finalize()
 
   def initialize(self):
     self.set_input_values()
@@ -76,17 +81,18 @@ class Terrapin(object):
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
-    #self.alpha = [40., alpha_r, alpha_a]
-    #self.k = [1E-2, k_r, k_a]
-    #self.layer_tops = [z_br - 30., z_br, z_sed]
-    #self.layer_names = ['bedrock2', 'bedrock', 'alluvium']
-    #self.layer_numbers = np.arange(len(self.layer_tops))
+    self.alpha = [40., alpha_r, alpha_a]
+    self.k = [1E-2, k_r, k_a]
+    self.layer_tops = [z_br - 30., z_br, z_sed]
+    self.layer_names = ['bedrock2', 'bedrock', 'alluvium']
+    self.layer_numbers = np.arange(len(self.layer_tops))
+    """
     self.alpha = [alpha_r, alpha_a]
     self.k = [k_r, k_a]
     self.layer_tops = [z_br, z_sed]
     self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
-    
+    """
     
     
     
@@ -136,7 +142,11 @@ class Terrapin(object):
 
 
 
-
+  def updateTopo(self):
+    # Will soon hold much of the "incise" machinery
+    # because "intersection" list is really topo, and this will then be mapped
+    # onto the layers
+    pass
 
 
 
@@ -157,6 +167,7 @@ class Terrapin(object):
     # AND SLOPE LENGTHS OF ALL LAYERS ABOVE A POINT -- SLOPE LENGTHS YES, BUT IF LAYERS 
     # ARE NON-HORIZONTAL AT THEIR BASE (E.G., ALLUVIUM), THEN WOULD HAVE TO ITERATE ANYWAY
     point = np.array([0, self.z_br_ch])
+    print "*", self.insideWhichLayer(point)
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
@@ -169,8 +180,8 @@ class Terrapin(object):
       # POSSIBLE THAT PROBLEM WILL BE CAUSED BY HAVING POINTS ALSO BE ABLE TO
       # BE ON TOP OF LAYERS
       if inLayer is not None:
-        if len(layer_updates) == 0:
-          layer_updates.append([inLayer, point.copy()])
+        #if len(layer_updates) == 0:
+        #  layer_updates.append([inLayer, point.copy()])
           #layer_updates[0][1][1] += 1
         angleOfRepose = self.alpha[inLayer]
         # Slope -- minus because solving for what is left of river
@@ -238,7 +249,12 @@ class Terrapin(object):
       # And after this, adjust the right-hand-sides of the layers to hit the river
       #self.cutLayersToRiver()
       
-    print self.layer_tops
+    print ""
+    print self.layer_tops[0]
+    print ""
+    print self.layer_tops[1]
+    print ""
+    print "================="
   
   def cutLayersToRiver(self):
     """
