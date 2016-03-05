@@ -118,6 +118,23 @@ class Terrapin(object):
     self.Pch = b/B
 
 
+  def erode_laterally(self):
+    # Might get complicated when everything isn't at just one elevation, h,
+    # or isn't just one material. In fact, will have to iterate, I think.
+    # But for now, keeping it simple
+    point = np.array([0, self.z_br_ch]) # Fix this in future to get edge of 
+                                        # valley wall
+    inLayer = self.insideWhichLayer(point)
+    # Valley width and probability of touching valley wall
+    B = 2*B_mod + b
+    Pch = b/B
+    # Hm, I think I might stop here. Lateral erosion will require the same
+    # get-point-and shoot tools as vertical erosion (so worth generalizing
+    # that), plus the possibility of iteration to an appropriate solution
+    # considering all the debris above -- and also thinking about how to 
+    # handle that
+    # So try multiple bedrock layers first, how about that?
+
 
 
   # For width relationship, Wickert et al. (2013) found that on braidplains
@@ -267,9 +284,15 @@ class Terrapin(object):
   def findIntersection(self, m, b, piecewiseLinear):
     """
     Find intersection between two lines.
-    m, b for slope coming up from river or slope above river and causing 
-    erosion
-    piecewise linear for geological layer top
+    
+    m, b for angle-of-repose slope (m) and intercept (b) coming up from river,
+         or, if this is after the first river--valley wall intersection,
+         somewhere on the slope above the river
+    
+    piecewiseLinear: A piecewise linear set of (x,y) positions for the next 
+                     geologic unit above the river. This should take the form:
+                     ((x1,y1), (x2,y2), (x3,y3), ..., (xn, yn))
+    
     """
     intersection = None
     for i in range(len(piecewiseLinear)-1):
@@ -307,23 +330,6 @@ class Terrapin(object):
       intersection = np.array([np.nan, np.nan])
 
     return intersection
-
-  def erode_laterally(self):
-    # Might get complicated when everything isn't at just one elevation, h,
-    # or isn't just one material. In fact, will have to iterate, I think.
-    # But for now, keeping it simple
-    point = np.array([0, self.z_br_ch]) # Fix this in future to get edge of 
-                                        # valley wall
-    inLayer = self.insideWhichLayer(point)
-    # Valley width and probability of touching valley wall
-    B = 2*B_mod + b
-    Pch = b/B
-    # Hm, I think I might stop here. Lateral erosion will require the same
-    # get-point-and shoot tools as vertical erosion (so worth generalizing
-    # that), plus the possibility of iteration to an appropriate solution
-    # considering all the debris above -- and also thinking about how to 
-    # handle that
-    # So try multiple bedrock layers first, how about that?
 
   def aggrade(self):
     """
