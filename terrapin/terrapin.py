@@ -31,6 +31,7 @@ class Terrapin(object):
     self.set_input_values()
 
   def update(self):
+    self.z_br_ch_old = self.z_br_ch
     # no alluviation yet
     self.incise()
     self.erode_laterally()
@@ -210,19 +211,6 @@ class Terrapin(object):
                 axis=0)
     
 
-    """
-    # UPDATE THIS NEXT -- REMOVE EVERYTHING BELOW TOPOGRAPHIC SURFACE,
-    # WHICH IS DEFINED BY NEW POINTS ON ERODED VALLEY WALL SURFACES    
-    for i in range(len(layer_updates)):      # And remove those values above it -- vertices from pre-incision topography
-      # Each intersect is origin for next shot, in turn, so that makes things easier.
-      # Can't use river as intersect #1 because can't calculate an appropriate slope
-      if i > 0:
-        origin = layer_updates[j-1][1]
-      else:
-        origin = self.layer_tops[layer_number][-1]
-      self.removeOldVertices(origin, intersection, layer_number)
-    """
-    
     # Probably unnecessary, but removing duplicates following the answer at:
     # http://stackoverflow.com/questions/8560440/
     # removing-duplicate-columns-and-rows-from-a-numpy-2d-array
@@ -241,6 +229,34 @@ class Terrapin(object):
       print self.layer_tops[i]
     print ""
     print "================="
+  
+  def aggrade(self):
+    """
+    Alluvial aggradation fills the valley with sediment up to a certain level.
+
+    If above the valley (i.e. flat plain), (should just disperse sediment 
+    over some distance. But for now will just error out.
+    """
+    pass
+    
+  def linemesh(self):
+    """
+    Something like this is likely to take the job of "aggrade" and "incise"
+    in order to build the lines in the model at each time step.
+    """
+    pass
+
+  # Other functions
+  def weathering(self):
+    """
+    Thanks to suggestion by Manfred Strecker about this; will be placeholder
+    for a possible third layer that will grow in time -- loose regolith.
+    """
+    pass
+    
+  #####################  
+  # Utility functions #
+  #####################
   
   def findIntersection(self, m, b, piecewiseLinear):
     """
@@ -291,38 +307,6 @@ class Terrapin(object):
       intersection = np.array([np.nan, np.nan])
 
     return intersection
-
-  def aggrade(self):
-    """
-    Fill up area within the valley with sediment (or disperse sediment 
-    over some distance on a flat plain? Or just error/quit in that case?
-    """
-    # Treat alluvium aggradation as distinctly different: just fills space
-    # up to certain level. If < max elevation of alluvium, draw a new line 
-    # (horizontal) and snap new points... otherwise it will be just 
-    pass
-    
-  def linemesh(self):
-    """
-    Something like this is likely to take the job of "aggrade" and "incise"
-    in order to build the lines in the model at each time step.
-    """
-    pass
-
-  # Other functions
-  def weathering(self):
-    """
-    Thanks to suggestion by Manfred Strecker about this; will be placeholder
-    for a possible third layer that will grow in time -- loose regolith.
-    """
-    pass
-    
-    
-    
-  #####################  
-  # Utility functions #
-  #####################
-  
   
   def piecewiseLinearAtX(self, x, pwl):
     """
