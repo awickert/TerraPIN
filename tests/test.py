@@ -2,10 +2,18 @@
 
 from terrapin import *
 
-tpin = Terrapin()
-tpin.set_input_values()
-tpin.z_br_ch = -60.
-tpin.incise()
-tpin.z_br_ch -= 10.
-tpin.incise()
+from matplotlib import pyplot as plt
 
+self = Terrapin()
+self.set_input_values()
+self.z_br_ch = -60.
+self.incise()
+plt.plot(self.topo[:,0], self.topo[:,1])
+self.z_br_ch -= 10.
+self.incise()
+plt.plot(self.topo[:,0], self.topo[:,1])
+self.z_br_ch -= 50.
+self.incise()
+plt.plot(self.topo[:,0], self.topo[:,1])
+
+plt.show()

@@ -199,7 +199,16 @@ class Terrapin(object):
       layer_top_index += 1
       
     # Add points at top of layer below, to follow topography
-          
+    for i in range(1, len(self.layer_tops)):
+      self.layer_tops[i] = \
+          np.append(self.layer_tops[i], 
+                    np.expand_dims(self.layer_tops[i-1][-1], 0),
+                    axis=0)
+    self.layer_tops[0] = \
+      np.append(self.layer_tops[0], 
+                np.expand_dims(self.topo[-1], 0),
+                axis=0)
+    
 
     """
     # UPDATE THIS NEXT -- REMOVE EVERYTHING BELOW TOPOGRAPHIC SURFACE,
