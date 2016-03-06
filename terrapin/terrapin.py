@@ -47,24 +47,12 @@ class Terrapin(object):
     """
     # elevation of the channel bedrock surface at the starting time
     self.z_br_ch = -60.
-    # ASSUMING FOR NOW THAT IT STARTS ON A FLAT PLANE, AND SOMEHOW IS NOT
-    # CAUSING AN ERROR -- ACTUALLY, THIS WILL BE SOMETHING ON THE TO-DO LIST:
-    # NORMALLY HAVE UNIFORM AGGRADATION ACROSS VALLEY, BUT ALLOW IT TO GO OVER 
-    # SOME MAXIMUM DISTANCE IF VALLEY BECOMES TOO WIDE -- PERHAPS RELATED TO 
-    # REWORKING RATE OF SYSTEM AND TIME STEP
     # Angle of repose of alluvium
     alpha_a = 32.
     # Angle of repose of bedrock 
     alpha_r = 75.
     # PROBABLY PUT THESE TWO IN A LIST TO WRITE MORE GENERAL CODE THAT CAN 
     # CYCLE THROUGH ANY NUMBER OF LAYER AND THEIR PARAMETERS
-    # NOW SOME GARBAGE CAN COEFFICIENT THAT COMBINES ERODIBILITY AND HOW 
-    # HARD IT IS TO REMOVE THE MATERIAL (PROBABLY RELATED TO HOW LARGE 
-    # THE RESULTING BLOCKS WILL BE). THEREFORE THIS SHOULD BE RELATED IN 
-    # SOME WAY TO THE ANGLE OF REPOSE (FRICTION ANGLE) BUT WILL LEAVE 
-    # SEPARATE FOR NOW.
-    # UNITS WILL DEPEND ON FORMULATION, BUT RIGHT NOW WILL BE [LENGTH^2/TIME]
-    # Erodibility coefficient of alluvium
     k_a = 1E-2
     # Erodibility coefficient of bedrock
     k_r = 1E-4
@@ -72,8 +60,6 @@ class Terrapin(object):
     # bedrock (x,z)
     z_br = np.array([[-np.inf, -10], [0, -10]])
     # sediment (x,z)
-    # HAVE TO DO SOMETHING ELSE IF NO SED PRESENT -- JUST TAKE IT OUT OF
-    # ARRAY, MOST LIKELY.
     z_sed = np.array([[-np.inf, 0], [0, 0]])
     # Define channel width at this point
     self.b = 50 # [m]
@@ -83,10 +69,6 @@ class Terrapin(object):
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
-    #self.alpha = [40., alpha_r, alpha_a]
-    #self.k = [1E-2, k_r, k_a]
-    #self.layer_tops = [z_br, z_sed] # Just temporary/arbitrary
-    #self.layer_names = ['bedrock', 'alluvium']
     """
     self.alpha = [alpha_r]
     self.k = [k_r]
@@ -94,77 +76,26 @@ class Terrapin(object):
     self.layer_names = ['bedrock']
     self.layer_numbers = np.arange(len(self.layer_tops))
     """
-    self.alpha = [alpha_a, alpha_r]
-    self.k = [k_a, k_r]
-    self.layer_tops = [z_sed, z_br]
-    self.layer_names = ['alluvium', 'bedrock']
+    self.alpha = [alpha_r, alpha_a]
+    self.k = [k_r, k_a]
+    self.layer_tops = [z_br, z_sed]
+    self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
-    
-  # MUST acknowledge off-calculation finite channel width, b: valley
-  # width *never* 0. 
-  
-  # Then can have functions for the differnet options on how to do things
-  # like:
-  
-  def Channel_Touching_Side_Braided_Random_Position(self):
-    """
-    After Wickert et al. (2013), JGR.
-    Channel position in cross-stream sense is random
-    (see also note by Bradley and Tucker -- small valley width, this is 
-    OK for meandering streams too)
-    """
-    # Remember that valley width = 2x what we have on model, + b
-    # B_mod = flat valley bottom width -- get this somehow -- what about 
-    # gradual incision issues though -- should keep affecting walls for some time!
-    # Yeah, lateral migration into sloping surface issue.
-    B = 2*B_mod + b
-    # So always touching wall when B = b, no excess valley width
-    self.Pch = b/B
 
 
   def erode_laterally(self):
-    # Might get complicated when everything isn't at just one elevation, h,
-    # or isn't just one material. In fact, will have to iterate, I think.
-    # But for now, keeping it simple
-    point = np.array([0, self.z_br_ch]) # Fix this in future to get edge of 
-                                        # valley wall
-    inLayer = self.insideWhichLayer(point)
-    # Valley width and probability of touching valley wall
-    B = 2*B_mod + b
-    Pch = b/B
-    # Hm, I think I might stop here. Lateral erosion will require the same
-    # get-point-and shoot tools as vertical erosion (so worth generalizing
-    # that), plus the possibility of iteration to an appropriate solution
-    # considering all the debris above -- and also thinking about how to 
-    # handle that
-    # So try multiple bedrock layers first, how about that?
-
-
-
-  # For width relationship, Wickert et al. (2013) found that on braidplains
-  # with no internal terraces (these presumed to cauase deviations from fit),
-  # river position must be random b/c exponential decay shape to pixels 
-  # visited. (Not so for meandering case: is power law around center -- 
-  # see Nate Bradley and Greg Tucker's paper.
-  # So I can assume braided and say contact with wall goes as 
-  # 1/(b-B) or something like this, but noting that b does go up (though 
-  # therefore power at contact goes down -- ooh, write an equation for this 
-  # too) 
-  # And then lower chance of contact with wall for meandering? How long will
-  # channel stay against walls -- will it be pushed against them b/c it wants 
-  # to have a more free floodplain? (Personifying, I know :) )
-  # Check Nate's paper. For now, use my braided approx.
-
-    
-
+    pass
 
 
   def updateTopo(self):
-    # Will soon hold much of the "incise" machinery
-    # because "intersection" list is really topo, and this will then be mapped
-    # onto the layers
-    pass
-
+    if self.dz > 0:
+      self.aggrade()
+    elif self.dz < 0:
+      self.incise
+    elif self.dz == 0:
+      pass
+    else:
+      sys.exit("Warning: dz is not finite")
 
 
 
@@ -178,11 +109,6 @@ class Terrapin(object):
     When collapse of bedrock does happen, it creates an angle-of-repose pile
     of sediments in the real world. Represent this in some way?
     """
-    # THINK THAT IF I CHANGE THE POINT HERE, I CAN GENERALIZE THIS TO LATERAL EROSION OF TERRACES AS WELL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # BUT THEN WOULD NEED TO REMOVE THE IMMEDIATE UPDATING STEP TO ADD AN ITERATION FOR LAYERS ABOVE THE LAYER IN QUESTION -- DIFFERENT ERODIBILITIES AND SLOPE LENGTHS
-    # AND/OR I WONDER IF IT WOULD BE POSSIBLE TO PREEMPTIVELY SUM THE ERODIBILITIES 
-    # AND SLOPE LENGTHS OF ALL LAYERS ABOVE A POINT -- SLOPE LENGTHS YES, BUT IF LAYERS 
-    # ARE NON-HORIZONTAL AT THEIR BASE (E.G., ALLUVIUM), THEN WOULD HAVE TO ITERATE ANYWAY
     point = np.array([0, self.z_br_ch])
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
@@ -204,7 +130,7 @@ class Terrapin(object):
           intersection.append(self.findIntersection(m, b, self.layer_tops[i]))
         intersection = np.array(intersection)
         # Define the chosen intersection
-        chosen_intersection = intersection.copy()
+        chosenintersectionion = intersection.copy()
         # First, use only those points are above the point in question
         intersection[intersection[:,1] <= point[1]] = np.nan
         # if nothing above, then we are at the top
@@ -212,7 +138,6 @@ class Terrapin(object):
           # Break out of loop
           point = None
         else:
-          # Find the path lengths to these intersections
           path_lengths = ( (intersection[:,0] - point[0])**2 \
                          + (intersection[:,1] - point[1])**2 )
           # And of these nonzero paths, find the shortest, and this is the
@@ -220,51 +145,86 @@ class Terrapin(object):
           # Chosen layer number will work here because self.layer_numbers is
           # ordered just by a np.arange (so same)
           chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
-          chosen_intersection = intersection[chosen_layer_number]
-          layer_updates.append([chosen_layer_number, chosen_intersection])
-          # Now note that chosen_intersection is the new starting point
-          point = chosen_intersection.copy()
-      point = None
+          chosenintersectionion = intersection[chosen_layer_number]
+          layer_updates.append([chosen_layer_number, chosenintersectionion])
+          # Now note that chosenintersectionion is the new starting point
+          point = chosenintersectionion.copy()
     
     # Wait until the end to update the cross-sectional profile
     for i in range(len(layer_updates)):
-      number = layer_updates[i][0]
-      intersect = layer_updates[i][1]
+      layer_number = layer_updates[i][0]
+      intersection = layer_updates[i][1]
       # Then add this into the proper layer
-      print intersect
-      self.layer_tops[number] = np.vstack(( self.layer_tops[number], np.expand_dims(intersect, 0) ))
-      # And remove those values above it -- vertices from pre-incision topography
-      # Each intersect is origin for next shot, in turn, so that makes things easier.
-      # Can't use river as intersect #1 because can't calculate an appropriate slope
-      for j in range(len(intersect)):
-        if j > 0:
-          origin = layer_updates[j-1][1]
-        else:
-          origin = self.layer_tops[layer_number][-1]
-        intersection = intersect
-        layer_number = number
-        self.removeOldVertices(layer_updates[i-1][1], intersect, number)
-      # Remove duplicates too, such as those that appear when there is 
-      # neither incision nor aggradation
-      # Following the answer at:
-      # http://stackoverflow.com/questions/8560440/
-      # removing-duplicate-columns-and-rows-from-a-numpy-2d-array
-      unique = np.unique(self.layer_tops[number].view([('', \
-               self.layer_tops[number].dtype)] * \
-               self.layer_tops[number].shape[1]))
-      self.layer_tops[number] = unique.view \
-                                (self.layer_tops[number].dtype) \
-                                .reshape((unique.shape[0], self.layer_tops \
-                                [number].shape[1]))
-    # And sort it in order of increasing x so it is at the proper point
+      print intersection
+      self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
+      
+    # Sort it in order of increasing x so it is at the proper point
     for i in range(len(layer_updates)):
       self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
-      # And after this, adjust the right-hand-sides of the layers to hit the river
-      for layer in self.layer_tops:
-        if layer[-1,-1] > self.z_br_ch:
-          layer[-1,-1] = self.z_br_ch
-          # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
-          # MOTION COME ON LINE
+
+    # And after this, adjust the right-hand-sides of the layers to hit the river
+    # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
+    #if self.layer_tops[0][-1,-1] > self.z_br_ch:
+    #  self.layer_tops[0][-1,-1] = self.z_br_ch
+      # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
+      # MOTION COME ON LINE
+    # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
+    # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
+
+    # Topographic profile
+    topo = []
+    topo.append([0, self.z_br_ch])
+    for row in layer_updates:
+      topo.append(list(row[1]))
+    topo.append(list(self.layer_tops[-1][0]))
+    self.topo = np.array(topo)[::-1]
+    
+    # Remove points that go beyond topo profile
+    layer_top_index = 0
+    for layer in self.layer_tops:
+      row_indices = []
+      row_index = 0
+      for point in layer:
+        x_point = point[0]
+        y_point = point[1]
+        y_topo = self.piecewiseLinearAtX(x_point, self.topo)
+        if y_point <= y_topo:
+          pass
+        else:
+          print point
+          row_indices.append(row_index)
+        row_index += 1
+      self.layer_tops[layer_top_index] = \
+          np.delete(self.layer_tops[layer_top_index], row_indices, axis=0)
+      layer_top_index += 1
+      
+    # Add points at top of layer below, to follow topography
+          
+
+    """
+    # UPDATE THIS NEXT -- REMOVE EVERYTHING BELOW TOPOGRAPHIC SURFACE,
+    # WHICH IS DEFINED BY NEW POINTS ON ERODED VALLEY WALL SURFACES    
+    for i in range(len(layer_updates)):      # And remove those values above it -- vertices from pre-incision topography
+      # Each intersect is origin for next shot, in turn, so that makes things easier.
+      # Can't use river as intersect #1 because can't calculate an appropriate slope
+      if i > 0:
+        origin = layer_updates[j-1][1]
+      else:
+        origin = self.layer_tops[layer_number][-1]
+      self.removeOldVertices(origin, intersection, layer_number)
+    """
+    
+    # Probably unnecessary, but removing duplicates following the answer at:
+    # http://stackoverflow.com/questions/8560440/
+    # removing-duplicate-columns-and-rows-from-a-numpy-2d-array
+    for i in range(len(layer_updates)):
+      unique = np.unique(self.layer_tops[i].view([('', \
+               self.layer_tops[i].dtype)] * \
+               self.layer_tops[i].shape[1]))
+      self.layer_tops[i] = unique.view \
+                                (self.layer_tops[i].dtype) \
+                                .reshape((unique.shape[0], self.layer_tops \
+                                [i].shape[1]))
 
     
     for i in range(len(self.layer_tops)):
@@ -372,24 +332,13 @@ class Terrapin(object):
       xmax_pwl = np.min( pwl[:,0][pwl[:,0] >= x] )
       z_xmin_pwl = float(pwl[:,1][pwl[:,0] == xmin_pwl])
       z_xmax_pwl = float(pwl[:,1][pwl[:,0] == xmax_pwl])
-      # In case the point is at intersection of two segments, just give it 
-      # the known z-value
-      # (this could have been avoided by using < and >= instead of <= and >=,
-      # but then that could cause problems of the point to be selected were 
-      # on the edge of the domain but still hanging on to the last defined 
-      # point
       if xmin_pwl == xmax_pwl:
-        # In this case, z_xmin_pwl and z_xmax_pwl are defined to be the same,
-        # so just pick one
         z = z_xmin_pwl
       else:
-        # define the line given by the segment endpoints
         # z = mx + b 
-        # slope
         m = (z_xmax_pwl - z_xmin_pwl)/(xmax_pwl - xmin_pwl)
-        # intercept -- could equally calculate with x_max
-        b = z_xmin_pwl - m*xmin_pwl
-        # Now can compute z
+        # using max to avoid -inf
+        b = z_xmax_pwl - m*xmax_pwl
         z = m*x + b
       
     return z
