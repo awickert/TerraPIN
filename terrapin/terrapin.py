@@ -72,7 +72,9 @@ class Terrapin(object):
     # bedrock (x,z)
     z_br = np.array([[-np.inf, 0], [0, 0]])
     # sediment (x,z)
-    z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
+    # HAVE TO DO SOMETHING ELSE IF NO SED PRESENT -- JUST TAKE IT OUT OF
+    # ARRAY, MOST LIKELY.
+    #z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
     # Define channel width at this point
     self.b = 50 # [m]
     # And the channel will start out the same width as its bedrock-valley
@@ -81,10 +83,14 @@ class Terrapin(object):
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
-    self.alpha = [40., alpha_r, alpha_a]
-    self.k = [1E-2, k_r, k_a]
-    self.layer_tops = [z_br - 30., z_br, z_sed]
-    self.layer_names = ['bedrock2', 'bedrock', 'alluvium']
+    #self.alpha = [40., alpha_r, alpha_a]
+    #self.k = [1E-2, k_r, k_a]
+    #self.layer_tops = [z_br, z_sed] # Just temporary/arbitrary
+    #self.layer_names = ['bedrock', 'alluvium']
+    self.alpha = [alpha_r]
+    self.k = [k_r]
+    self.layer_tops = [z_br]
+    self.layer_names = ['bedrock']
     self.layer_numbers = np.arange(len(self.layer_tops))
     """
     self.alpha = [alpha_r, alpha_a]
@@ -93,8 +99,6 @@ class Terrapin(object):
     self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
     """
-    
-    
     
   # MUST acknowledge off-calculation finite channel width, b: valley
   # width *never* 0. 
@@ -188,7 +192,6 @@ class Terrapin(object):
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
-    
     while point is not None:
       inLayer = self.insideWhichLayer(point)
       print inLayer
@@ -252,6 +255,9 @@ class Terrapin(object):
       #  self.removeOldVertices(layer_updates[i-1][1], intersect, number)
       if i > 0:
         self.removeOldVertices(layer_updates[i-1][1], intersect, number)
+      else:
+        pass
+        #WORK HERE!!!
       # Remove duplicates too, such as those that appear when there is 
       # neither incision nor aggradation
       # Following the answer at:
@@ -264,14 +270,16 @@ class Terrapin(object):
     for i in range(len(layer_updates)):
       self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
       # And after this, adjust the right-hand-sides of the layers to hit the river
-      #self.cutLayersToRiver()
-      
-    print ""
-    print self.layer_tops[0]
-    print ""
-    print self.layer_tops[1]
+      self.cutLayersToRiver()
+    
+    for i in range(len(self.layer_tops)):
+      print ""
+      print self.layer_tops[i]
     print ""
     print "================="
+    
+    # NEXT NEED TO REMOVE REDUNDANT VERTICES
+    # self.removeOldVertices (above) not working
   
   def cutLayersToRiver(self):
     """
@@ -358,8 +366,11 @@ class Terrapin(object):
     
     
     
-    
-  # Utility functions
+  #####################  
+  # Utility functions #
+  #####################
+  
+  
   def piecewiseLinearAtX(self, x, pwl):
     """
     Evaluates a piecewise linear expression to solve for z at a given x.
@@ -447,10 +458,22 @@ class Terrapin(object):
     """
     Think this will test slope on either side of each vertex, and if they
     are the same, will remove it.
-    Not sure if it will be needed
+    Not entirely good -- doesn't remove proper point on incision
     """
-    pass
+    for layer_top in self.layer_tops:
+      slopes = np.diff(layer_top[:,1])/np.diff(layer_top[:,0])
+      redundant_segments = np.diff(slopes) == 0
+      # First point and last point are never redundant, so this will
+      # be for one of the midpoints, hence has length - 2 when compared
+      # to t.layer_tops
+      new_layer_top = np.vstack(( layer_top[0,:],
+                                  layer_top[1:-1,:][redundant_segments == False],
+                                  layer_top[-1,:] ))
+    
+    
   
+  #self.removeOldVertices(layer_updates[i][1], intersect, number)
+        
   def removeOldVertices(self, origin, intersection, layer_number):
     """
     This will then find out if there are old vertices that lie above the new
@@ -460,6 +483,9 @@ class Terrapin(object):
     intersection = new endpoint computed (x,z)
     origin = "point" -- where the line shoots from (river or otherwise) (x,z)
     layer_number = the number of the layer to edit!
+    
+    This could be deprecated due to the more general and simpler method
+    in removeRedundantVertices (above)
     """
     
     # First, define line segment of interest
