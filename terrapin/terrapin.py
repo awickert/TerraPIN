@@ -70,11 +70,11 @@ class Terrapin(object):
     k_r = 1E-4
     # Surface elevation profiles -- start out flat
     # bedrock (x,z)
-    z_br = np.array([[-np.inf, 0], [0, 0]])
+    z_br = np.array([[-np.inf, -10], [0, -10]])
     # sediment (x,z)
     # HAVE TO DO SOMETHING ELSE IF NO SED PRESENT -- JUST TAKE IT OUT OF
     # ARRAY, MOST LIKELY.
-    #z_sed = np.array([[-np.inf, -np.inf], [0, -np.inf]])
+    z_sed = np.array([[-np.inf, 0], [0, 0]])
     # Define channel width at this point
     self.b = 50 # [m]
     # And the channel will start out the same width as its bedrock-valley
@@ -87,18 +87,18 @@ class Terrapin(object):
     #self.k = [1E-2, k_r, k_a]
     #self.layer_tops = [z_br, z_sed] # Just temporary/arbitrary
     #self.layer_names = ['bedrock', 'alluvium']
+    """
     self.alpha = [alpha_r]
     self.k = [k_r]
     self.layer_tops = [z_br]
     self.layer_names = ['bedrock']
     self.layer_numbers = np.arange(len(self.layer_tops))
     """
-    self.alpha = [alpha_r, alpha_a]
-    self.k = [k_r, k_a]
-    self.layer_tops = [z_br, z_sed]
-    self.layer_names = ['bedrock', 'alluvium']
+    self.alpha = [alpha_a, alpha_r]
+    self.k = [k_a, k_r]
+    self.layer_tops = [z_sed, z_br]
+    self.layer_names = ['alluvium', 'bedrock']
     self.layer_numbers = np.arange(len(self.layer_tops))
-    """
     
   # MUST acknowledge off-calculation finite channel width, b: valley
   # width *never* 0. 
@@ -159,10 +159,6 @@ class Terrapin(object):
 
 
 
-
-
-
-
   def updateTopo(self):
     # Will soon hold much of the "incise" machinery
     # because "intersection" list is really topo, and this will then be mapped
@@ -188,32 +184,24 @@ class Terrapin(object):
     # AND SLOPE LENGTHS OF ALL LAYERS ABOVE A POINT -- SLOPE LENGTHS YES, BUT IF LAYERS 
     # ARE NON-HORIZONTAL AT THEIR BASE (E.G., ALLUVIUM), THEN WOULD HAVE TO ITERATE ANYWAY
     point = np.array([0, self.z_br_ch])
-    print "*", self.insideWhichLayer(point)
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
     while point is not None:
       inLayer = self.insideWhichLayer(point)
-      print inLayer
-      # if inLayer is none, it must be above all layers.
-      # then break out of loop at end
-      # POSSIBLE THAT PROBLEM WILL BE CAUSED BY HAVING POINTS ALSO BE ABLE TO
-      # BE ON TOP OF LAYERS
-      if inLayer is not None:
-        #if len(layer_updates) == 0:
-        #  layer_updates.append([inLayer, point.copy()])
-          #layer_updates[0][1][1] += 1
+      if inLayer is None:
+        sys.exit("should alluviate here! improve code!")
+      else:
+        print "*", inLayer
+        # slope-intercept
         angleOfRepose = self.alpha[inLayer]
-        # Slope -- minus because solving for what is left of river
         m = - np.tan( (np.pi/180.) * angleOfRepose)
-        # Intercept
         b = point[1] - m*point[0]
         # Find intersection with each layer
         intersection = []
         for i in self.layer_numbers:
           # list of 1D numpy arrays
           intersection.append(self.findIntersection(m, b, self.layer_tops[i]))
-        # turn it into a 2D array from a 1D list of 1D arrays
         intersection = np.array(intersection)
         # Define the chosen intersection
         chosen_intersection = intersection.copy()
@@ -243,51 +231,47 @@ class Terrapin(object):
       number = layer_updates[i][0]
       intersect = layer_updates[i][1]
       # Then add this into the proper layer
-      #print self.layer_tops[number]
+      print intersect
       self.layer_tops[number] = np.vstack(( self.layer_tops[number], np.expand_dims(intersect, 0) ))
-      #print self.layer_tops[number]
       # And remove those values above it -- vertices from pre-incision topography
       # Each intersect is origin for next shot, in turn, so that makes things easier.
       # Can't use river as intersect #1 because can't calculate an appropriate slope
-      #if i == 0:
-      #  self.removeOldVertices(np.array([0, self.z_br_ch]), intersect, number)
-      #else:
-      #  self.removeOldVertices(layer_updates[i-1][1], intersect, number)
-      if i > 0:
+      for j in range(len(intersect)):
+        if j > 0:
+          origin = layer_updates[j-1][1]
+        else:
+          origin = self.layer_tops[layer_number][-1]
+        intersection = intersect
+        layer_number = number
         self.removeOldVertices(layer_updates[i-1][1], intersect, number)
-      else:
-        pass
-        #WORK HERE!!!
       # Remove duplicates too, such as those that appear when there is 
       # neither incision nor aggradation
       # Following the answer at:
-      # http://stackoverflow.com/questions/8560440/removing-duplicate-columns-and-rows-from-a-numpy-2d-array
+      # http://stackoverflow.com/questions/8560440/
+      # removing-duplicate-columns-and-rows-from-a-numpy-2d-array
       unique = np.unique(self.layer_tops[number].view([('', \
-               self.layer_tops[number].dtype)]*self.layer_tops[number].shape[1]))
-      self.layer_tops[number] = unique.view(self.layer_tops[number].dtype).reshape((unique.shape[0], self.layer_tops[number].shape[1]))
-     
+               self.layer_tops[number].dtype)] * \
+               self.layer_tops[number].shape[1]))
+      self.layer_tops[number] = unique.view \
+                                (self.layer_tops[number].dtype) \
+                                .reshape((unique.shape[0], self.layer_tops \
+                                [number].shape[1]))
     # And sort it in order of increasing x so it is at the proper point
     for i in range(len(layer_updates)):
       self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
       # And after this, adjust the right-hand-sides of the layers to hit the river
-      self.cutLayersToRiver()
+      for layer in self.layer_tops:
+        if layer[-1,-1] > self.z_br_ch:
+          layer[-1,-1] = self.z_br_ch
+          # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
+          # MOTION COME ON LINE
+
     
     for i in range(len(self.layer_tops)):
       print ""
       print self.layer_tops[i]
     print ""
     print "================="
-    
-    # NEXT NEED TO REMOVE REDUNDANT VERTICES
-    # self.removeOldVertices (above) not working
-  
-  def cutLayersToRiver(self):
-    """
-    Ensure that the layers drop into the river.
-    """
-    for layer in self.layer_tops:
-      if layer[-1,-1] > self.z_br_ch:
-        layer[-1,-1] = self.z_br_ch
   
   def findIntersection(self, m, b, piecewiseLinear):
     """
@@ -432,7 +416,8 @@ class Terrapin(object):
     # Find lowest elevation above point
     layers_above_point = layer_elevations_at_point > point[1]
     if layers_above_point.any():
-      layer_elevation_point_is_inside = layer_elevations_at_point[layers_above_point]
+      layer_elevation_point_is_inside = \
+        np.min(layer_elevations_at_point[layers_above_point])
     # while I see the main use of this as checking for incision, thereby 
     # making these next statements not needed, I will check if the point is
     # at or above the highest layer
