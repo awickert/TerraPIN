@@ -111,7 +111,7 @@ class Terrapin(object):
       if inLayer is None:
         sys.exit("should alluviate here! improve code!")
       else:
-        print "*", inLayer
+        #print "*", inLayer
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -148,7 +148,7 @@ class Terrapin(object):
       layer_number = layer_updates[i][0]
       intersection = layer_updates[i][1]
       # Then add this into the proper layer
-      print intersection
+      #print intersection
       self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
       
     # Sort it in order of increasing x so it is at the proper point
@@ -178,7 +178,7 @@ class Terrapin(object):
         if y_point <= y_topo:
           pass
         else:
-          print point
+          #print point
           row_indices.append(row_index)
         row_index += 1
       self.layer_tops[layer_top_index] = \
@@ -196,19 +196,31 @@ class Terrapin(object):
                 np.expand_dims(self.topo[-1], 0),
                 axis=0)
     
+    # Probably unnecessary
+    self.layer_tops = self.rmdup(self.layer_tops)
 
-    # Probably unnecessary, but removing duplicates following the answer at:
-    # http://stackoverflow.com/questions/8560440/
-    # removing-duplicate-columns-and-rows-from-a-numpy-2d-array
-    for i in range(len(layer_updates)):
-      unique = np.unique(self.layer_tops[i].view([('', \
-               self.layer_tops[i].dtype)] * \
-               self.layer_tops[i].shape[1]))
-      self.layer_tops[i] = unique.view \
-                                (self.layer_tops[i].dtype) \
-                                .reshape((unique.shape[0], self.layer_tops \
-                                [i].shape[1]))
-
+  def rmdup(self, layers):
+    """
+    removing duplicates following the answer at:
+    http://stackoverflow.com/questions/16970982/find-unique-rows-in-numpy-array/
+    """
+    # Single layer or multiple layers in list or other structure?
+    output = []
+    if type(layers) is np.ndarray:
+      layers = [layers]
+      _wasarray = True
+    else:
+      _wasarray = False
+    for layer in layers:
+      unique = np.ascontiguousarray(layer).view(np.dtype((np.void, \
+               layer.dtype.itemsize * layer.shape[1])))
+      _, idx = np.unique(unique, return_index=True)
+      layer = layer[sorted(idx)]
+      output.append(layer)
+    if _wasarray:
+      output = output[0]
+    return output
+    
   def erode_laterally(self):
     pass
 
@@ -253,10 +265,17 @@ class Terrapin(object):
         topo.append(list(row[1]))
     topo.append(list(self.layer_tops[-1][0]))
     self.topo = np.array(topo)[::-1]
-  
+    self.topo = self.rmdup(self.topo)
+    print self.topo
+    print ""
+
   def topoPlot(self):
     topoFinite = self.topo.copy()
-    xmin = self.topo[1,0]
+    #print topoFinite
+    if len(topoFinite) > 2:
+      xmin = self.topo[1,0]
+    else:
+      xmin = -1E3 # arbitrarily large
     yrange = np.max(self.topo[:,1]) - np.min(self.topo[:,1])
     topoFinite[0,0] = xmin * 1000 # arbitrarily large number
     plt.plot(topoFinite[:,0], topoFinite[:,1])
@@ -423,7 +442,7 @@ class Terrapin(object):
     layer_elevations_at_point = np.array(layer_elevations_at_point)
 
     # Find lowest elevation above point
-    print layer_elevations_at_point, point
+    #print layer_elevations_at_point, point
     # Get invalid value error if there is a nan, which means that the layer
     # does not exist above that point
     # But this will always be false anyway, so this is fine. Just suppress
