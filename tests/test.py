@@ -6,14 +6,15 @@ from matplotlib import pyplot as plt
 
 self = Terrapin()
 self.initialize()
+self.topoPlot()
 self.z_ch = -60.
 self.updateTopo()
-plt.plot(self.topo[:,0], self.topo[:,1])
+self.topoPlot()
 self.z_ch -= 10.
 self.updateTopo()
-plt.plot(self.topo[:,0], self.topo[:,1])
+self.topoPlot()
 self.z_ch -= 20.
 self.updateTopo()
-plt.plot(self.topo[:,0], self.topo[:,1])
+self.topoPlot()
 
 plt.show()

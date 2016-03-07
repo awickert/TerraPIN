@@ -248,9 +248,20 @@ class Terrapin(object):
     topo = []
     topo.append([0, self.z_ch])
     for row in layers:
-      topo.append(list(row[1]))
+      topoPoint = list(row[1])
+      if topoPoint[-1] >= self.z_ch:
+        topo.append(list(row[1]))
     topo.append(list(self.layer_tops[-1][0]))
     self.topo = np.array(topo)[::-1]
+  
+  def topoPlot(self):
+    topoFinite = self.topo.copy()
+    xmin = self.topo[1,0]
+    yrange = np.max(self.topo[:,1]) - np.min(self.topo[:,1])
+    topoFinite[0,0] = xmin * 1000 # arbitrarily large number
+    plt.plot(topoFinite[:,0], topoFinite[:,1])
+    plt.ylim((-0.1*yrange + np.min(topoFinite[:,1]), 0.1*yrange + np.max(topoFinite[:,1])))
+    plt.xlim((1.2*xmin, 0))
   
   def layer_boundaries(self):
     """
