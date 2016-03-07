@@ -31,7 +31,7 @@ class Terrapin(object):
     self.set_input_values()
 
   def update(self):
-    self.z_br_ch_old = self.z_br_ch
+    self.topographicProfile(layer_updates)
     # no alluviation yet
     self.incise()
     self.erode_laterally()
@@ -46,8 +46,8 @@ class Terrapin(object):
     way, but currently just is where I type the values into this file itself.
     Early stages of development!
     """
-    # elevation of the channel bedrock surface at the starting time
-    self.z_br_ch = -60.
+    # elevation of the channel bed at the starting time
+    self.z_ch = -60.
     # Angle of repose of alluvium
     alpha_a = 32.
     # Angle of repose of bedrock 
@@ -84,20 +84,17 @@ class Terrapin(object):
     self.layer_numbers = np.arange(len(self.layer_tops))
 
 
-  def erode_laterally(self):
-    pass
-
-
   def updateTopo(self):
+    self.z_ch_old = self.topo[-1]
+    self.dz = self.z_ch - self.z_ch_old
     if self.dz > 0:
       self.aggrade()
     elif self.dz < 0:
-      self.incise
+      self.incise()
     elif self.dz == 0:
       pass
     else:
       sys.exit("Warning: dz is not finite")
-
 
 
   # START OUT BY WRITING SEPARATE INCISION AND AGGRADATION ALGORITHMS FOR 
@@ -110,7 +107,7 @@ class Terrapin(object):
     When collapse of bedrock does happen, it creates an angle-of-repose pile
     of sediments in the real world. Represent this in some way?
     """
-    point = np.array([0, self.z_br_ch])
+    point = np.array([0, self.z_ch])
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
@@ -165,20 +162,14 @@ class Terrapin(object):
 
     # And after this, adjust the right-hand-sides of the layers to hit the river
     # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
-    #if self.layer_tops[0][-1,-1] > self.z_br_ch:
-    #  self.layer_tops[0][-1,-1] = self.z_br_ch
+    #if self.layer_tops[0][-1,-1] > self.z_ch:
+    #  self.layer_tops[0][-1,-1] = self.z_ch
       # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
       # MOTION COME ON LINE
     # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
     # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
 
-    # Topographic profile
-    topo = []
-    topo.append([0, self.z_br_ch])
-    for row in layer_updates:
-      topo.append(list(row[1]))
-    topo.append(list(self.layer_tops[-1][0]))
-    self.topo = np.array(topo)[::-1]
+    self.topographicProfile(layer_updates)
     
     # Remove points that go beyond topo profile
     layer_top_index = 0
@@ -223,7 +214,9 @@ class Terrapin(object):
                                 .reshape((unique.shape[0], self.layer_tops \
                                 [i].shape[1]))
 
-    
+  def erode_laterally(self):
+    pass
+
     for i in range(len(self.layer_tops)):
       print ""
       print self.layer_tops[i]
@@ -237,7 +230,19 @@ class Terrapin(object):
     If above the valley (i.e. flat plain), (should just disperse sediment 
     over some distance. But for now will just error out.
     """
-    pass
+    x_valley_wall = piecewiseLinearAtZ(self.z_ch)
+    aggraded_surface = np.array([[x_valley_wall, self.z_ch],
+                                 [0, self.z_ch]])
+    # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
+    
+   def topographicProfile(self, layers):
+    # Topographic profile
+    topo = []
+    topo.append([0, self.z_ch])
+    for row in layers:
+      topo.append(list(row[1]))
+    topo.append(list(self.layer_tops[-1][0]))
+    self.topo = np.array(topo)[::-1]
     
   def linemesh(self):
     """
@@ -336,6 +341,38 @@ class Terrapin(object):
       
     return z
     
+  def piecewiseLinearAtZ(self, z, pwl):
+    """
+    Evaluates a piecewise linear expression to solve for x at a given z.
+    z:   the z-value
+    pwl: a 2-column numpy array, ([x, z]), that must contain at least
+         four entries (two points define a line)
+    """
+    
+    # First check if x(z) not defined for this line.
+    if z < np.min(pwl[:,0]) or z > np.max(pwl[:,0]):
+      z = np.nan
+    else:
+      # First, define line segment of interest
+      zmin_pwl = np.max( pwl[:,1][pwl[:,1] <= z] )
+      zmax_pwl = np.min( pwl[:,1][pwl[:,1] >= z] )
+      # Using np.max here because not necessarily a function in (z, x) space
+      # (horizontal lines); max value matters for alluviation
+      x_zmin_pwl = float(np.max(pwl[:,0][pwl[:,1] == zmin_pwl]))
+      x_zmax_pwl = float(np.max(pwl[:,0][pwl[:,1] == zmax_pwl]))
+      if zmin_pwl == zmax_pwl:
+        x = x_zmin_pwl
+      else:
+        # z = mx + b 
+        m = (x_zmax_pwl - x_zmin_pwl)/(zmax_pwl - zmin_pwl)
+        # using max to avoid -inf
+        bz = x_zmax_pwl - m*zmax_pwl
+        x = m*z + bz
+      
+    return x
+ 
+  def nextToWhichLayer(self, point)
+  
   def insideWhichLayer(self, point):
     """
     Point is (x,z)
@@ -380,51 +417,6 @@ class Terrapin(object):
     
     return layer_number
     
-    
-  def removeRedundantVertices(self):
-    """
-    Think this will test slope on either side of each vertex, and if they
-    are the same, will remove it.
-    Not entirely good -- doesn't remove proper point on incision
-    """
-    for layer_top in self.layer_tops:
-      slopes = np.diff(layer_top[:,1])/np.diff(layer_top[:,0])
-      redundant_segments = np.diff(slopes) == 0
-      # First point and last point are never redundant, so this will
-      # be for one of the midpoints, hence has length - 2 when compared
-      # to t.layer_tops
-      new_layer_top = np.vstack(( layer_top[0,:],
-                                  layer_top[1:-1,:][redundant_segments == False],
-                                  layer_top[-1,:] ))
-    
-    
-  
-  #self.removeOldVertices(layer_updates[i][1], intersect, number)
-        
-  def removeOldVertices(self, origin, intersection, layer_number):
-    """
-    This will then find out if there are old vertices that lie above the new
-    line. Just have to pass new line endpoints to it and the characteristics of 
-    the 
-    
-    intersection = new endpoint computed (x,z)
-    origin = "point" -- where the line shoots from (river or otherwise) (x,z)
-    layer_number = the number of the layer to edit!
-    
-    This could be deprecated due to the more general and simpler method
-    in removeRedundantVertices (above)
-    """
-    
-    # First, define line segment of interest
-    # Know that origin will always be to the right -- more positive
-    m = (origin[1] - intersection[1]) / (origin[0] - intersection[0])
-    b = origin[1] - m*origin[0]
-    
-    # Then limit to where values are lower or equal
-    self.layer_tops[layer_number] = self.layer_tops[layer_number][self.layer_tops[layer_number][:,1] <= self.layer_tops[layer_number][:,0]*m + b]
-    
-    
-  
   def store_layers(self):
     """
     Save layers for visualization and analysis
