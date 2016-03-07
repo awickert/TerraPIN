@@ -29,12 +29,11 @@ class Terrapin(object):
 
   def initialize(self):
     self.set_input_values()
+    self.topographicProfile(self.layer_tops)
 
   def update(self):
-    self.topographicProfile(layer_updates)
-    # no alluviation yet
-    self.incise()
-    self.erode_laterally()
+    self.updateTopo()
+    #self.erode_laterally()
 
   def finalize(self):
     pass
@@ -47,7 +46,7 @@ class Terrapin(object):
     Early stages of development!
     """
     # elevation of the channel bed at the starting time
-    self.z_ch = -60.
+    self.z_ch = 0.
     # Angle of repose of alluvium
     alpha_a = 32.
     # Angle of repose of bedrock 
@@ -71,21 +70,21 @@ class Terrapin(object):
     # Alluvium is always the last one
     # Goes from bottom of strat column to top
     """
-    self.alpha = [alpha_r]
-    self.k = [k_r]
-    self.layer_tops = [z_br]
-    self.layer_names = ['bedrock']
-    self.layer_numbers = np.arange(len(self.layer_tops))
-    """
     self.alpha = [alpha_r, alpha_a]
     self.k = [k_r, k_a]
     self.layer_tops = [z_br, z_sed]
     self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
-
+    """
+    self.alpha = {'bedrock': alpha_r, 'alluvium': alpha_a}
+    self.k = {'bedrock': k_r, 'alluvium': k_a}
+    self.layer_tops = [z_br, z_sed]
+    self.layer_names = ['bedrock_0', 'alluvium_0']
+    self.layer_numbers = np.array([0, 1])
+    self.layer_lithologies = ['bedrock', 'alluvium']
 
   def updateTopo(self):
-    self.z_ch_old = self.topo[-1]
+    self.z_ch_old = self.topo[-1,-1]
     self.dz = self.z_ch - self.z_ch_old
     if self.dz > 0:
       self.aggrade()
@@ -96,10 +95,6 @@ class Terrapin(object):
     else:
       sys.exit("Warning: dz is not finite")
 
-
-  # START OUT BY WRITING SEPARATE INCISION AND AGGRADATION ALGORITHMS FOR 
-  # SIMPLICITY. MAY EVENTUALLY BECOME PART OF THE SAME FUNCTION, OR AT LEAST
-  # SHARE SOME METHODS
   def incise(self):
     """
     When river incises, compute erosion and angle-of-repose destruction of
@@ -118,7 +113,7 @@ class Terrapin(object):
       else:
         print "*", inLayer
         # slope-intercept
-        angleOfRepose = self.alpha[inLayer]
+        angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
         b = point[1] - m*point[0]
         # Find intersection with each layer
@@ -230,12 +225,25 @@ class Terrapin(object):
     If above the valley (i.e. flat plain), (should just disperse sediment 
     over some distance. But for now will just error out.
     """
-    x_valley_wall = piecewiseLinearAtZ(self.z_ch)
+    x_valley_wall = self.piecewiseLinearAtZ(self.z_ch, self.topo)
     aggraded_surface = np.array([[x_valley_wall, self.z_ch],
                                  [0, self.z_ch]])
+    # Find uppermost points below and to the right;
+    # These will be surface below.
+    
+    # Maybe I have to bite the bullet and just make full layer polygons, or
+    # at least sideways U-shapes with ends at infinity.
+    
+    # Geologic layers always go from top to bottom.
+    # So layers below give bottom of layer above.
+    # Layers below and within topo.
+    alluv_layers = np.array(self.layer_lithologies) == 'alluvium'
+    
+    # And then see if any of this is alluvium
+    # And/or see where alluvium is
     # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
     
-   def topographicProfile(self, layers):
+  def topographicProfile(self, layers):
     # Topographic profile
     topo = []
     topo.append([0, self.z_ch])
@@ -243,7 +251,17 @@ class Terrapin(object):
       topo.append(list(row[1]))
     topo.append(list(self.layer_tops[-1][0]))
     self.topo = np.array(topo)[::-1]
-    
+  
+  def layer_boundaries(self):
+    """
+    For each line segment:
+      find all highest points that are below it.
+      append these to a big line.
+    Attach this to the layer_top stuff, as the layer bottom
+    And then there is a closed boundary, and I can write methods to test what
+    touches this or is inside it.
+    """
+  
   def linemesh(self):
     """
     Something like this is likely to take the job of "aggrade" and "incise"
@@ -371,7 +389,8 @@ class Terrapin(object):
       
     return x
  
-  def nextToWhichLayer(self, point)
+  def nextToWhichLayer(self, point):
+    pass
   
   def insideWhichLayer(self, point):
     """
@@ -393,7 +412,13 @@ class Terrapin(object):
     layer_elevations_at_point = np.array(layer_elevations_at_point)
 
     # Find lowest elevation above point
-    layers_above_point = layer_elevations_at_point > point[1]
+    print layer_elevations_at_point, point
+    # Get invalid value error if there is a nan, which means that the layer
+    # does not exist above that point
+    # But this will always be false anyway, so this is fine. Just suppress
+    # the error
+    with np.errstate(invalid='ignore'):
+      layers_above_point = layer_elevations_at_point > point[1]
     if layers_above_point.any():
       layer_elevation_point_is_inside = \
         np.min(layer_elevations_at_point[layers_above_point])
