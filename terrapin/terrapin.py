@@ -94,6 +94,8 @@ class Terrapin(object):
       pass
     else:
       sys.exit("Warning: dz is not finite")
+    print self.topo
+    print ""
 
   def incise(self):
     """
@@ -106,6 +108,7 @@ class Terrapin(object):
     # And layer_updates holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
+    chosen_layer_numbers = []
     while point is not None:
       inLayer = self.insideWhichLayer(point)
       if inLayer is None:
@@ -120,10 +123,11 @@ class Terrapin(object):
         intersection = []
         for i in self.layer_numbers:
           # list of 1D numpy arrays
-          intersection.append(self.findIntersection(m, b, self.layer_tops[i]))
+          intersection.append(self.findIntersection(m=m, b=b, \
+                                   piecewiseLinear=self.layer_tops[i]))
         intersection = np.array(intersection)
         # Define the chosen intersection
-        chosenintersectionion = intersection.copy()
+        chosenIntersectionion = intersection.copy()
         # First, use only those points are above the point in question
         intersection[intersection[:,1] <= point[1]] = np.nan
         # if nothing above, then we are at the top
@@ -138,15 +142,16 @@ class Terrapin(object):
           # Chosen layer number will work here because self.layer_numbers is
           # ordered just by a np.arange (so same)
           chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
-          chosenintersectionion = intersection[chosen_layer_number]
-          layer_updates.append([chosen_layer_number, chosenintersectionion])
-          # Now note that chosenintersectionion is the new starting point
-          point = chosenintersectionion.copy()
+          chosenIntersectionion = intersection[chosen_layer_number]
+          chosen_layer_numbers.append(chosen_layer_number)
+          layer_updates.append(chosenIntersectionion)
+          # Now note that chosenIntersectionion is the new starting point
+          point = chosenIntersectionion.copy()
     
     # Wait until the end to update the cross-sectional profile
     for i in range(len(layer_updates)):
-      layer_number = layer_updates[i][0]
-      intersection = layer_updates[i][1]
+      layer_number = chosen_layer_numbers[i]
+      intersection = layer_updates[i]
       # Then add this into the proper layer
       #print intersection
       self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
@@ -164,7 +169,7 @@ class Terrapin(object):
     # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
     # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
 
-    self.topographicProfile(layer_updates)
+    self.newIncisedTopo(layer_updates)
     
     # Remove points that go beyond topo profile
     layer_top_index = 0
@@ -269,9 +274,11 @@ class Terrapin(object):
     # This will work only if alluvium is in valley, not on broader surface
     if contacts_layer_number: # Are we inside any layer?
       if self.layer_lithologies[contacts_layer_number] == 'alluvium':
-        tmplayer = self.layer_tops[contacts_layer_number]
+        tmplayer = self.layer_tops[contacts_layer_number][:]
+      # If it intersects here, then new layer is below
+      tmplayer = tmplayer[tmplayer[:,1] > aggraded_surface[0,1]]
     else:
-      tmp_layer_tops = self.layer_tops
+      tmp_layer_tops = self.layer_tops[:]
       tmp_layer_tops.append(aggraded_surface)
       tmp_layer_numbers = np.arange(len(self.layer_numbers)+1)
       for i in range(len(alluv_layer_numbers)):
@@ -282,17 +289,41 @@ class Terrapin(object):
                     layer_numbers=self.layer_numbers)
           if inlayer == tmp_layer_numbers[-1]:
             contacts_layer_number = alluv_layer_number
-            tmplayer = self.layer_tops[contacts_layer_number]
-
+            tmplayer = self.layer_tops[contacts_layer_number][:]
+      # In this case, layer is above -- can simply append
+      # though x will make a jog back to the left, to the surprise of all!
+      # (via valley geometry)
     if tmplayer:
-      # COMBINE THIS WITH OTHER ALLUV LAYER -- DO LATER.
-      pass
+      # COMBINE THIS WITH OTHER ALLUV LAYER
+      tmplayer = np.vstack((tmplayer, aggraded_surface))
+      self.layer_tops[contacts_layer_number] = tmplayer[:]
     else:
       self.layer_tops = tmp_layer_tops
       self.layer_numbers = tmp_layer_numbers
-            
+      
     self.topographicProfile(self.layer_tops)
 
+    """
+    if tmplayer:
+      # COMBINE THIS WITH OTHER ALLUV LAYER
+      # First, find the intersection point between the two layers
+      # If it intersects here, then new layer is below
+      # (first option from above)
+      tmplayer = tmplayer[tmplayer[:,1] > intersection[1]]
+    """
+      
+    """
+    # Can skip this -- we already know how it will attach!
+    intersection = self.findIntersectionSegment(alluv_layer, tmplayer)
+    if type(intersection) is not type(None):
+      # Take only those points with a higher y-value
+      tmplayer = tmplayer[tmplayer[:,1] > intersection[1]]
+      # And then append
+      tmplayer = np.vstack((tmplayer, intersection))
+    #combilayer = np.vstack((tmplayer, aggraded_surface))
+    """
+            
+  
     """
       segment
       for alluv_layer in alluv_layers:
@@ -312,19 +343,82 @@ self.layer_tops[top_corner_in_layer_number]
     
   def topographicProfile(self, layers):
     # Topographic profile
+    # Pick only the highest points at each position
+    topo = []
+    #allpoints = np.concatenate(layers[::-1])
+    topoPoints = []
+    for layer in layers:
+      layerPoints = []
+      for point in layer:
+        print point
+        layer_elevations_at_x = []
+        for layer in layers:
+          layer_elevations_at_x.append( self.piecewiseLinearAtX(point[0], layer) )
+        layer_elevations_at_x = np.array(layer_elevations_at_x)
+        layer_elevations_at_x = \
+              layer_elevations_at_x[np.isnan(layer_elevations_at_x) == False]
+        if (point[1] >= np.array(layer_elevations_at_x)).all():
+          if (point[0] == 0) and (point[1] >= self.z_ch):
+            pass
+          else:
+            layerPoints.append(point)
+      if len(layerPoints) > 0:
+        topoPoints.append(np.array(layerPoints))
+    topoPoints.append(np.array([[0, self.z_ch]]))
+    topoPoints = np.vstack(topoPoints)
+    # reverse
+    topoPoints = topoPoints[::-1]
+    # Backwards (i.e. topmost first); pick first point seen
+    for i in range(len(topoPoints)):
+      layerPoints = topoPoints[i]
+      print layerPoints.ndim == 1
+      if layerPoints.ndim == 1:
+        layerPoints = np.expand_dims(layerPoints, 0)
+      for point in layerPoints:
+        try:
+          inlist = np.sum(np.product(np.asarray(topo) == point, axis=1))
+        except:
+          inlist = np.sum(np.product(np.asarray(topo) == point, axis=0))
+        if inlist:
+          pass
+        else:
+          topo.append(point)
+    topo = np.array(topo)[::-1]
+    self.topo = topo
+
+    """
+    if topo[-1][0] != 0:
+      topo.append([0, self.z_ch])
+    self.topo = np.array(topo)
+    """
+    
+    
+  def newIncisedTopo(self, layers):
     topo = []
     topo.append([0, self.z_ch])
     for point in layers:
-      topoPoint = list(point[1])
-      if topoPoint[-1] >= self.z_ch:
+      if point[-1] >= self.z_ch:
+        topo.append(list(point))
+    topo.append(list(self.layer_tops[-1][0]))
+    topo = np.array(topo)[::-1]
+    topo = self.rmdup(topo)
+    topo = topo[ topo[:,0].argsort()]
+    self.topo = topo
+    """
+    topo = []
+    topo.append([0, self.z_ch])
+    for point  in layers:
+      if (point != np.array([0, self.z_ch])).all():
         topo.append(list(point[1]))
     topo.append(list(self.layer_tops[-1][0]))
     topo = np.array(topo)[::-1]
     topo = self.rmdup(topo)
     topo = topo[ topo[:,0].argsort()]
     self.topo = topo
-    print self.topo
-    print ""
+    #print self.topo
+    #print ""
+    """
+
 
   def topoPlot(self):
     # Should make ylim 0 at start to do this properly
@@ -437,6 +531,32 @@ self.layer_tops[top_corner_in_layer_number]
 
     return intersection
   
+  def findIntersectionSegment(self, segment, piecewiseLinear):
+    """
+    Find intersection between a line segment and a piecewise linear line.
+    Returns None-value if the intersection is off the line
+    
+    segment: endpoints of the line segment
+    
+    piecewiseLinear: A piecewise linear set of (x,y) positions for the next 
+                     geologic unit above the river. This should take the form:
+                     ((x1,y1), (x2,y2), (x3,y3), ..., (xn, yn))
+    
+    """
+    m = (segment[1,1] - segment[0,1]) / (segment[1,0]-segment[0,0])
+    b = segment[0,1] - m*segment[0,0]
+    
+    intersection_no_bounds = self.findIntersection(m, b, piecewiseLinear)
+    
+    x_inb = intersection_no_bounds[0]
+    
+    if (x_inb <= np.max(segment[:,0])) and (x_inb >= np.min(segment[:,0])):
+      intersection = intersection_no_bounds
+    else:
+      intersection = None
+      
+    return intersection
+
   def piecewiseLinearAtX(self, x, pwl):
     """
     Evaluates a piecewise linear expression to solve for z at a given x.
@@ -452,8 +572,8 @@ self.layer_tops[top_corner_in_layer_number]
       # First, define line segment of interest
       xmin_pwl = np.max( pwl[:,0][pwl[:,0] <= x] )
       xmax_pwl = np.min( pwl[:,0][pwl[:,0] >= x] )
-      z_xmin_pwl = float(pwl[:,1][pwl[:,0] == xmin_pwl])
-      z_xmax_pwl = float(pwl[:,1][pwl[:,0] == xmax_pwl])
+      z_xmin_pwl = np.mean(pwl[:,1][pwl[:,0] == xmin_pwl]) # in case two have it
+      z_xmax_pwl = np.mean(pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
       if xmin_pwl == xmax_pwl:
         z = z_xmin_pwl
       else:
@@ -558,7 +678,7 @@ self.layer_tops[top_corner_in_layer_number]
     if layer_elevation_point_is_inside is not None:
       layer_number = layer_numbers[layer_elevations_at_point \
                                    == layer_elevation_point_is_inside]
-      layer_number = int(layer_number)
+      layer_number = int(np.mean(layer_number))
     
     return layer_number
     
