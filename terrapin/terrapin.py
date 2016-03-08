@@ -94,7 +94,8 @@ class Terrapin(object):
       pass
     else:
       sys.exit("Warning: dz is not finite")
-    print self.topo
+    #print self.topo
+    print self.layer_tops
     print ""
 
   def incise(self):
@@ -286,20 +287,21 @@ class Terrapin(object):
         alluv_layer_number = alluv_layer_numbers[i]
         for point in alluv_layer:
           inlayer = self.insideWhichLayer(point=point, layers=tmp_layer_tops, \
-                    layer_numbers=self.layer_numbers)
+                    layer_numbers=tmp_layer_numbers)
           if inlayer == tmp_layer_numbers[-1]:
             contacts_layer_number = alluv_layer_number
             tmplayer = self.layer_tops[contacts_layer_number][:]
       # In this case, layer is above -- can simply append
       # though x will make a jog back to the left, to the surprise of all!
       # (via valley geometry)
-    if tmplayer:
+    if tmplayer is not None:
       # COMBINE THIS WITH OTHER ALLUV LAYER
       tmplayer = np.vstack((tmplayer, aggraded_surface))
       self.layer_tops[contacts_layer_number] = tmplayer[:]
     else:
       self.layer_tops = tmp_layer_tops
       self.layer_numbers = tmp_layer_numbers
+      self.layer_lithologies.append('alluvium')
       
     self.topographicProfile(self.layer_tops)
 
@@ -350,7 +352,7 @@ self.layer_tops[top_corner_in_layer_number]
     for layer in layers:
       layerPoints = []
       for point in layer:
-        print point
+        #print point
         layer_elevations_at_x = []
         for layer in layers:
           layer_elevations_at_x.append( self.piecewiseLinearAtX(point[0], layer) )
@@ -371,7 +373,7 @@ self.layer_tops[top_corner_in_layer_number]
     # Backwards (i.e. topmost first); pick first point seen
     for i in range(len(topoPoints)):
       layerPoints = topoPoints[i]
-      print layerPoints.ndim == 1
+      #print layerPoints.ndim == 1
       if layerPoints.ndim == 1:
         layerPoints = np.expand_dims(layerPoints, 0)
       for point in layerPoints:
@@ -494,7 +496,8 @@ self.layer_tops[top_corner_in_layer_number]
                      ((x1,y1), (x2,y2), (x3,y3), ..., (xn, yn))
     
     """
-    intersection = None
+    # Backwards: specialized to get lowest intersection first.
+    intersection = []
     for i in range(len(piecewiseLinear)-1):
       # Piecewise linear preparation
       # Because of sorting, xy0 is always < xy1
@@ -520,14 +523,16 @@ self.layer_tops[top_corner_in_layer_number]
         # Because there is some numerical error created by defining yint
         # with such an equation let's add a rounding term: round to nearest
         # 1E-9 m (nanometer) -- because totally insignificant in these systems
-        intersection = np.round(np.array([xint, yint]), 9)
+        intersection.append(np.round(np.array([xint, yint]), 9))
         break
     # If at the end of the loop, nothing has been found, 
     # replace it with np.nan
-    if intersection is not None:
-      pass
-    else:
+    if intersection == []:
       intersection = np.array([np.nan, np.nan])
+    elif len(intersection) == 1:
+      intersection = intersection[0]
+    else:
+      sys.exit()
 
     return intersection
   
