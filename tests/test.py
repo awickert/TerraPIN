@@ -13,7 +13,7 @@ self.topoPlot()
 self.z_ch -= 10.
 self.updateTopo()
 self.topoPlot()
-self.z_ch -= 20.
+self.z_ch += 20.
 self.updateTopo()
 self.topoPlot()
 

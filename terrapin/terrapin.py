@@ -266,9 +266,10 @@ class Terrapin(object):
 
     contacts_layer_number = self.insideWhichLayer(aggraded_surface[0])
     tmplayer = None
-    # This will work only if alluvium is in valley
-    if self.layer_lithologies[contacts_layer_number] == 'alluvium':
-      tmplayer = self.layer_tops[contacts_layer_number]
+    # This will work only if alluvium is in valley, not on broader surface
+    if contacts_layer_number: # Are we inside any layer?
+      if self.layer_lithologies[contacts_layer_number] == 'alluvium':
+        tmplayer = self.layer_tops[contacts_layer_number]
     else:
       tmp_layer_tops = self.layer_tops
       tmp_layer_tops.append(aggraded_surface)
@@ -474,7 +475,7 @@ self.layer_tops[top_corner_in_layer_number]
     
     # First check if x(z) not defined for this line.
     if z < np.min(pwl[:,0]) or z > np.max(pwl[:,0]):
-      z = np.nan
+      x = np.nan
     else:
       # First, define line segment of interest
       zmin_pwl = np.max( pwl[:,1][pwl[:,1] <= z] )
