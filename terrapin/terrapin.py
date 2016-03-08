@@ -246,40 +246,105 @@ class Terrapin(object):
     # Maybe I have to bite the bullet and just make full layer polygons, or
     # at least sideways U-shapes with ends at infinity.
     
+    # Will start by just trying to use topography
+    # Find topo points within this layer
+    
+    # ALL NEW ALLUVIUM HAS TOPO UNDERNEATH AS ITS BOTTOM-DEFINING LAYER
+    # IN-VALLEY ALLUVIUM MAY HAVE MULTIPLE LAYERS UNDERNEATH
+
     # Geologic layers always go from top to bottom.
     # So layers below give bottom of layer above.
     # Layers below and within topo.
-    alluv_layers = np.array(self.layer_lithologies) == 'alluvium'
+    layer_is_alluvium = np.array(self.layer_lithologies) == 'alluvium'
+    # Need to specify axis -- DEPRECATION WARNING
+    alluv_layers = list(np.array(self.layer_tops)[layer_is_alluvium])
+    alluv_layer_numbers = self.layer_numbers[layer_is_alluvium]
     
     # And then see if any of this is alluvium
     # And/or see where alluvium is
     # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
+
+    contacts_layer_number = self.insideWhichLayer(aggraded_surface[0])
+    tmplayer = None
+    # This will work only if alluvium is in valley
+    if self.layer_lithologies[contacts_layer_number] == 'alluvium':
+      tmplayer = self.layer_tops[contacts_layer_number]
+    else:
+      tmp_layer_tops = self.layer_tops
+      tmp_layer_tops.append(aggraded_surface)
+      tmp_layer_numbers = np.arange(len(self.layer_numbers)+1)
+      for i in range(len(alluv_layer_numbers)):
+        alluv_layer = alluv_layers[i]
+        alluv_layer_number = alluv_layer_numbers[i]
+        for point in alluv_layer:
+          inlayer = self.insideWhichLayer(point=point, layers=tmp_layer_tops, \
+                    layer_numbers=self.layer_numbers)
+          if inlayer == tmp_layer_numbers[-1]:
+            contacts_layer_number = alluv_layer_number
+            tmplayer = self.layer_tops[contacts_layer_number]
+
+    if tmplayer:
+      # COMBINE THIS WITH OTHER ALLUV LAYER -- DO LATER.
+      pass
+    else:
+      self.layer_tops = tmp_layer_tops
+      self.layer_numbers = tmp_layer_numbers
+            
+    self.topographicProfile(self.layer_tops)
+
+    """
+      segment
+      for alluv_layer in alluv_layers:
+        for point in alluv_layer:
+          if isPointOnSegment(point, 
+    """
+      
+    """
+      tmplayer = \
+           np.vstack((self.layer_tops[top_corner_in_layer_number],
+           aggraded_surface))
+      tmplayer = tmplayer[ tmplayer[:,0].argsort()]
+self.layer_tops[top_corner_in_layer_number]    
+    
+    isPointOnSegment
+    """
     
   def topographicProfile(self, layers):
     # Topographic profile
     topo = []
     topo.append([0, self.z_ch])
-    for row in layers:
-      topoPoint = list(row[1])
+    for point in layers:
+      topoPoint = list(point[1])
       if topoPoint[-1] >= self.z_ch:
-        topo.append(list(row[1]))
+        topo.append(list(point[1]))
     topo.append(list(self.layer_tops[-1][0]))
-    self.topo = np.array(topo)[::-1]
-    self.topo = self.rmdup(self.topo)
+    topo = np.array(topo)[::-1]
+    topo = self.rmdup(topo)
+    topo = topo[ topo[:,0].argsort()]
+    self.topo = topo
     print self.topo
     print ""
 
   def topoPlot(self):
+    # Should make ylim 0 at start to do this properly
     topoFinite = self.topo.copy()
     #print topoFinite
-    if len(topoFinite) > 2:
-      xmin = self.topo[1,0]
+    if np.isinf(topoFinite).any():
+      if len(topoFinite) > 2:
+        xmin = self.topo[1,0]
+      else:
+        xmin = -1E3 # arbitrarily large
+      topoFinite[0,0] = xmin * 1000 # arbitrarily large number
     else:
-      xmin = -1E3 # arbitrarily large
+      xmin = self.topo[0,0]
     yrange = np.max(self.topo[:,1]) - np.min(self.topo[:,1])
-    topoFinite[0,0] = xmin * 1000 # arbitrarily large number
     plt.plot(topoFinite[:,0], topoFinite[:,1])
-    plt.ylim((-0.1*yrange + np.min(topoFinite[:,1]), 0.1*yrange + np.max(topoFinite[:,1])))
+    # ylim
+    proposed_ylim = np.array([-0.1*yrange + np.min(topoFinite[:,1]), 0.1*yrange + np.max(topoFinite[:,1])])
+    both_ylims = np.vstack(( proposed_ylim, np.array(plt.ylim()) ))
+    ylim_top = np.max(both_ylims)
+    ylim_bottom = np.min(both_ylims)
+    plt.ylim(( ylim_bottom, ylim_top ))
     plt.xlim((1.2*xmin, 0))
   
   def layer_boundaries(self):
@@ -310,6 +375,16 @@ class Terrapin(object):
   #####################  
   # Utility functions #
   #####################
+  
+  def distance(a,b):
+    return ((a[0] - b[0])**2 + (a[1] - b[1])**2)**.5
+
+  def isPointOnSegment(point, segment):
+    """
+    Is point on line segment?
+    """
+    return distance(segment[0], point) + distance(segment[1], point) \
+       == distance(segment[0], segment[1])
   
   def findIntersection(self, m, b, piecewiseLinear):
     """
@@ -420,9 +495,9 @@ class Terrapin(object):
     return x
  
   def nextToWhichLayer(self, point):
-    pass
+    self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideWhichLayer(self, point):
+  def insideWhichLayer(self, point, layers=None, layer_numbers=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -434,11 +509,21 @@ class Terrapin(object):
     incises, the point will end up in the ground, and will have to project out 
     of that. In plausible cases, it might end up projecting back up through 
     multiple materials.
+    
+    Defaults to work on the standard list of layers.
     """
     
+    if layers is None:
+      layers = self.layer_tops
+    if layer_numbers is None:
+      layer_numbers=self.layer_numbers
+      
+    if type(layers) == np.ndarray:
+      layers = [layers]
+    
     layer_elevations_at_point = []
-    for i in range(len(self.layer_tops)):
-      layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], self.layer_tops[i]))
+    for i in range(len(layers)):
+      layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
 
     # Find lowest elevation above point
@@ -458,16 +543,20 @@ class Terrapin(object):
     # MAYBE CUTOFF HERE WITH OPTION SO WE DON'T RETURN LAYER TOPS WHEN YOU REALLY
     # WANT TO KNOW WHAT YOU'RE INSIDE, ONLY.
     else:
-      layers_at_or_above_point = layer_elevations_at_point >= point[1]
+      # See note above
+      with np.errstate(invalid='ignore'):
+        layers_at_or_above_point = layer_elevations_at_point >= point[1]
       if layers_at_or_above_point.any():
-        layer_elevation_point_is_inside = layer_elevations_at_point[layers_at_or_above_point]
+        layer_elevation_point_is_inside = \
+                        layer_elevations_at_point[layers_at_or_above_point]
       else:
         # If neither of these, must be above everything
         layer_elevation_point_is_inside = None
         layer_number = None
       
     if layer_elevation_point_is_inside is not None:
-      layer_number = self.layer_numbers[layer_elevations_at_point == layer_elevation_point_is_inside]
+      layer_number = layer_numbers[layer_elevations_at_point \
+                                   == layer_elevation_point_is_inside]
       layer_number = int(layer_number)
     
     return layer_number
