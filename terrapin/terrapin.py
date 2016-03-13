@@ -297,11 +297,15 @@ class Terrapin(object):
     if tmplayer is not None:
       # COMBINE THIS WITH OTHER ALLUV LAYER
       tmplayer = np.vstack((tmplayer, aggraded_surface))
+      tmplayer = tmplayer[tmplayer[:,-1] >= self.z_ch] # take only points
+                                                       # not buried under alluv
       self.layer_tops[contacts_layer_number] = tmplayer[:]
     else:
       self.layer_tops = tmp_layer_tops
       self.layer_numbers = tmp_layer_numbers
       self.layer_lithologies.append('alluvium')
+
+
       
     self.topographicProfile(self.layer_tops)
 
