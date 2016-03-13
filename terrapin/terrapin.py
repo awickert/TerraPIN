@@ -596,6 +596,7 @@ self.layer_tops[top_corner_in_layer_number]
     z:   the z-value
     pwl: a 2-column numpy array, ([x, z]), that must contain at least
          four entries (two points define a line)
+    This will make the line be as long as possible
     """
     
     # First check if x(z) not defined for this line.
@@ -605,9 +606,10 @@ self.layer_tops[top_corner_in_layer_number]
       # First, define line segment of interest
       zmin_pwl = np.max( pwl[:,1][pwl[:,1] <= z] )
       zmax_pwl = np.min( pwl[:,1][pwl[:,1] >= z] )
-      # Using np.max here because not necessarily a function in (z, x) space
-      # (horizontal lines); max value matters for alluviation
-      x_zmin_pwl = float(np.max(pwl[:,0][pwl[:,1] == zmin_pwl]))
+      # Using np.max and np.min here because not necessarily a function in 
+      # (z, x) space (horizontal lines); max/min value matters for alluviation
+      # IF ANYTHING HAS TO BE CHANGED, IT WILL BE HERE!!!!!!!!!!!!!!!!!!!!!!!!!S
+      x_zmin_pwl = float(np.min(pwl[:,0][pwl[:,1] == zmin_pwl]))
       x_zmax_pwl = float(np.max(pwl[:,0][pwl[:,1] == zmax_pwl]))
       if zmin_pwl == zmax_pwl:
         x = x_zmin_pwl
