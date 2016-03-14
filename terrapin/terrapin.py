@@ -116,8 +116,23 @@ class Terrapin(object):
     while point is not None:
       inLayer = self.insideWhichLayer(point)
       if inLayer is None:
-        print "Exited top layer: interior alluvial valley?"
-        break
+        if point[1] < np.max(np.vstack(self.layer_tops)):
+          # Must be internal layer that it has exited; go horizontally
+          # until a new layer has been found
+          # Start with last layer you were in; this will break
+          # if this doesn't exist (starting above all layers -- should
+          # aggrade instead in that case!)
+          chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
+          # If above all layers -- horizontally until it hits former topo
+          newpoint = point.copy()
+          newpoint[1] = self.piecewiseLinearAtZ(point[1], self.topo)
+          chosenIntersectionion = newpoint
+          chosen_layer_numbers.append(chosen_layer_number)
+          layer_updates.append(chosenIntersectionion)
+          # Now note that chosenIntersectionion is the new starting point
+          point = chosenIntersectionion.copy()
+        else:
+          break
       else:
         print "*", inLayer
         # slope-intercept
