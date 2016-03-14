@@ -451,7 +451,8 @@ class Terrapin(object):
     out_ls = list(np.squeeze(out))
     return out_ls
 
-  def topoPlot(self):
+  def topoPlot(self, linestyle='-'):
+    #print kwargs
     # Should make ylim 0 at start to do this properly
     topoFinite = self.topo.copy()
     #print topoFinite
@@ -464,9 +465,10 @@ class Terrapin(object):
     else:
       xmin = self.topo[0,0]
     yrange = np.max(self.topo[:,1]) - np.min(self.topo[:,1])
-    plt.plot(topoFinite[:,0], topoFinite[:,1])
+    plt.plot(topoFinite[:,0], topoFinite[:,1], linestyle)
     # ylim
-    proposed_ylim = np.array([-0.1*yrange + np.min(topoFinite[:,1]), 0.1*yrange + np.max(topoFinite[:,1])])
+    proposed_ylim = np.array([-0.1*yrange + np.min(topoFinite[:,1]), \
+                               0.1*yrange + np.max(topoFinite[:,1])])
     both_ylims = np.vstack(( proposed_ylim, np.array(plt.ylim()) ))
     ylim_top = np.max(both_ylims)
     ylim_bottom = np.min(both_ylims)
