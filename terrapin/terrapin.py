@@ -142,11 +142,11 @@ class Terrapin(object):
           # If above all layers -- horizontally until it hits former topo
           newpoint = point.copy()
           newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
-          chosenIntersectionion = newpoint
+          chosenIntersection = newpoint
           chosen_layer_numbers.append(chosen_layer_number)
-          layer_updates.append(chosenIntersectionion)
-          # Now note that chosenIntersectionion is the new starting point
-          point = chosenIntersectionion.copy()
+          layer_updates.append(chosenIntersection)
+          # Now note that chosenIntersection is the new starting point
+          point = chosenIntersection.copy()
         else:
           print "Somehow your point is above the topography, while incising."
           break
@@ -157,33 +157,34 @@ class Terrapin(object):
         m = - np.tan( (np.pi/180.) * angleOfRepose)
         b = point[1] - m*point[0]
         # Find intersection with each layer
-        intersection = []
+        intersections = []
         for i in self.layer_numbers:
           # list of 1D numpy arrays
-          intersection.append(self.findIntersection(m=m, b=b, \
-                                   piecewiseLinear=self.layer_tops[i]))
-        intersection = np.array(intersection)
-        # Define the chosen intersection
-        chosenIntersectionion = intersection.copy()
+          intersections.append(self.findLikelyBestIntersection(m=m, b=b, \
+                                    piecewiseLinear=self.layer_tops[i], \
+                                    starting_point=point))
+        intersections = np.squeeze(np.array(intersections))
         # First, use only those points are above the point in question
-        intersection[intersection[:,1] <= point[1]] = np.nan
+        # now handled in function
+        #intersections[intersections[:,1] <= point[1]] = np.nan
         # if nothing above, then we are at the top
-        if np.isnan(intersection).all():
+        if np.isnan(intersections).all():
           # Break out of loop
           point = None
         else:
-          path_lengths = ( (intersection[:,0] - point[0])**2 \
-                         + (intersection[:,1] - point[1])**2 )
+          path_lengths = ( (intersections[:,0] - point[0])**2 \
+                         + (intersections[:,1] - point[1])**2 )
           # And of these nonzero paths, find the shortest, and this is the
           # chosen intersection
           # Chosen layer number will work here because self.layer_numbers is
           # ordered just by a np.arange (so same)
-          chosen_layer_number = (path_lengths == np.nanmin(path_lengths)).nonzero()[0][0]
-          chosenIntersectionion = intersection[chosen_layer_number]
+          chosen_layer_number = (path_lengths == \
+                                 np.nanmin(path_lengths)).nonzero()[0][0]
+          chosenIntersection = intersections[chosen_layer_number]
           chosen_layer_numbers.append(chosen_layer_number)
-          layer_updates.append(chosenIntersectionion)
-          # Now note that chosenIntersectionion is the new starting point
-          point = chosenIntersectionion.copy()
+          layer_updates.append(chosenIntersection)
+          # Now note that chosenIntersection is the new starting point
+          point = chosenIntersection.copy()
     
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
@@ -513,7 +514,36 @@ class Terrapin(object):
     return distance(segment[0], point) + distance(segment[1], point) \
        == distance(segment[0], segment[1])
   
-  def findIntersection(self, m, b, piecewiseLinear):
+  def findLikelyBestIntersection(self, m, b, piecewiseLinear, starting_point):
+    intersections = self.findIntersections(m, b, piecewiseLinear)
+    # First check if there is anything to work with
+    if intersections.size == 0:
+      intersection = np.array([np.nan, np.nan])
+    # Then if there is, see if it is an independent point
+    else:
+      intersections_at_or_above_point = \
+          intersections[intersections[:,1] >= starting_point[1]]
+      # remove any points that duplicate the starting point
+      intersections_at_or_above_point = intersections_at_or_above_point[ \
+          np.prod(intersections_at_or_above_point == starting_point, axis=1) \
+          == 0]
+      if intersections_at_or_above_point.size == 2:
+        # One point
+        intersection = intersections_at_or_above_point
+      elif intersections_at_or_above_point.size < 2:
+        intersection = np.array([np.nan, np.nan])
+      else:
+        intersection = intersections_at_or_above_point[ \
+                       intersections_at_or_above_point[:,1] == \
+                       np.min(intersections_at_or_above_point[:,1])]
+      """
+      # always going to be lowest point, so don't need full distance
+      distances = []
+      for point in intersections_at_or_above_point
+      """
+    return np.squeeze(np.array(intersection))
+    
+  def findIntersections(self, m, b, piecewiseLinear):
     """
     Find intersection between two lines.
     
@@ -526,8 +556,7 @@ class Terrapin(object):
                      ((x1,y1), (x2,y2), (x3,y3), ..., (xn, yn))
     
     """
-    # Backwards: specialized to get lowest intersection first.
-    intersection = []
+    intersections = []
     for i in range(len(piecewiseLinear)-1):
       # Piecewise linear preparation
       # Because of sorting, xy0 is always < xy1
@@ -553,22 +582,14 @@ class Terrapin(object):
         # Because there is some numerical error created by defining yint
         # with such an equation let's add a rounding term: round to nearest
         # 1E-9 m (nanometer) -- because totally insignificant in these systems
-        intersection.append(np.round(np.array([xint, yint]), 9))
-        break
-    # If at the end of the loop, nothing has been found, 
-    # replace it with np.nan
-    if intersection == []:
-      intersection = np.array([np.nan, np.nan])
-    elif len(intersection) == 1:
-      intersection = intersection[0]
-    else:
-      sys.exit()
+        intersections.append(np.round(np.array([xint, yint]), 9))
+    # Always return 2D array
+    intersections = np.array(intersections, ndmin=2)
+    return intersections
 
-    return intersection
-  
   def findIntersectionSegment(self, segment, piecewiseLinear):
     """
-    Find intersection between a line segment and a piecewise linear line.
+    Find intersections between a line segment and a piecewise linear line.
     Returns None-value if the intersection is off the line
     
     segment: endpoints of the line segment
@@ -581,7 +602,7 @@ class Terrapin(object):
     m = (segment[1,1] - segment[0,1]) / (segment[1,0]-segment[0,0])
     b = segment[0,1] - m*segment[0,0]
     
-    intersection_no_bounds = self.findIntersection(m, b, piecewiseLinear)
+    intersection_no_bounds = self.findIntersections(m, b, piecewiseLinear)
     
     x_inb = intersection_no_bounds[0]
     
