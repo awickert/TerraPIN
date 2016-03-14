@@ -116,38 +116,37 @@ class Terrapin(object):
     topodefflag = False
     while point is not None:
       inLayer = self.insideWhichLayer(point)
-      if inLayer is None:
+      if np.prod(point == np.vstack(self.layer_tops), axis=1).any():
+        # If this is the case, you are at some kind of intersecton.
+        # Pick the layer immediately below to follow.
+        # Got to make these rules more general sometime.
+        # Leave boundary -- strange things happen on it.
+        inLayer = self.insideWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
+        #higher_points = self.layer_tops[inLayer]\
+        #                [self.layer_tops[inLayer][:,1] > point[1]]
+        # AT THIS POINT, JUST TAKE THE REST OF THE TOPOGRPAHY
+        oldtopo = self.topo[self.topo[:,-1] > point[-1]]
+        topo = np.vstack((oldtopo, np.vstack(layer_updates[::-1]), np.array([0, self.z_ch])))
+        self.topo = topo.copy()
+        topodefflag = True
+        break
+      elif inLayer is None:
         if point[1] < np.max(np.vstack(self.layer_tops)):
-          if np.prod(point == np.vstack(self.layer_tops), axis=1).any():
-            # If this is the case, you are at some kind of intersecton.
-            # Pick the layer immediately below to follow.
-            # Got to make these rules more general sometime.
-            # Leave boundary -- strange things happen on it.
-            inLayer = self.insideWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
-            #higher_points = self.layer_tops[inLayer]\
-            #                [self.layer_tops[inLayer][:,1] > point[1]]
-            # AT THIS POINT, JUST TAKE THE REST OF THE TOPOGRPAHY
-            oldtopo = self.topo[self.topo[:,-1] > point[-1]]
-            topo = np.vstack((oldtopo, np.vstack(layer_updates[::-1]), np.array([0, self.z_ch])))
-            self.topo = topo.copy()
-            topodefflag = True
-            break
-          else:
-            # Must be along the top of an
-            # internal layer that it has exited; go horizontally
-            # until a new layer has been found
-            # Start with last layer you were in; this will break
-            # if this doesn't exist (starting above all layers -- should
-            # aggrade instead in that case!)
-            chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
-            # If above all layers -- horizontally until it hits former topo
-            newpoint = point.copy()
-            newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
-            chosenIntersectionion = newpoint
-            chosen_layer_numbers.append(chosen_layer_number)
-            layer_updates.append(chosenIntersectionion)
-            # Now note that chosenIntersectionion is the new starting point
-            point = chosenIntersectionion.copy()
+          # Must be along the top of an
+          # internal layer that it has exited; go horizontally
+          # until a new layer has been found
+          # Start with last layer you were in; this will break
+          # if this doesn't exist (starting above all layers -- should
+          # aggrade instead in that case!)
+          chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
+          # If above all layers -- horizontally until it hits former topo
+          newpoint = point.copy()
+          newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
+          chosenIntersectionion = newpoint
+          chosen_layer_numbers.append(chosen_layer_number)
+          layer_updates.append(chosenIntersectionion)
+          # Now note that chosenIntersectionion is the new starting point
+          point = chosenIntersectionion.copy()
         else:
           print "Somehow your point is above the topography, while incising."
           break
