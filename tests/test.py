@@ -13,8 +13,17 @@ self.topoPlot()
 self.z_ch -= 10.
 self.updateTopo()
 self.topoPlot()
-self.z_ch += 20.
+self.z_ch += 50.
 self.updateTopo()
 self.topoPlot()
+self.z_ch -= 10
+self.updateTopo()
+self.topoPlot()
+self.z_ch += 30
+self.updateTopo()
+self.topoPlot()
+self.z_ch -= 2
+self.updateTopo()
 
+self.topoPlot('ko-')
 plt.show()
