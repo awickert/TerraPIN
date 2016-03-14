@@ -296,21 +296,10 @@ class Terrapin(object):
     x_valley_wall = self.piecewiseLinearAtZ(self.z_ch, self.topo)
     aggraded_surface = np.array([[x_valley_wall, self.z_ch],
                                  [0, self.z_ch]])
-    # Find uppermost points below and to the right;
-    # These will be surface below.
-    
-    # Maybe I have to bite the bullet and just make full layer polygons, or
-    # at least sideways U-shapes with ends at infinity.
-    
-    # Will start by just trying to use topography
-    # Find topo points within this layer
-    
-    # ALL NEW ALLUVIUM HAS TOPO UNDERNEATH AS ITS BOTTOM-DEFINING LAYER
-    # IN-VALLEY ALLUVIUM MAY HAVE MULTIPLE LAYERS UNDERNEATH
+    oldtopo = self.topo[self.topo[:,-1] > self.z_ch]
+    topo = np.vstack((oldtopo, aggraded_surface))
+    self.topo = topo.copy()
 
-    # Geologic layers always go from top to bottom.
-    # So layers below give bottom of layer above.
-    # Layers below and within topo.
     layer_is_alluvium = np.array(self.layer_lithologies) == 'alluvium'
     # Need to specify axis -- DEPRECATION WARNING
     alluv_layers = list(np.array(self.layer_tops)[layer_is_alluvium])
@@ -319,8 +308,18 @@ class Terrapin(object):
     # And then see if any of this is alluvium
     # And/or see where alluvium is
     # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
-
+    # top one should never work.
     contacts_layer_number = self.insideWhichLayer(aggraded_surface[0])
+    # but this might
+    if contacts_layer_number is None:
+      layers_below = []
+      for layer in self.layer_tops:
+        layers_below.append(self.piecewiseLinearAtX(0, layer))
+      layer_number_immediately_below = (layers_below == \
+                                    np.nanmax(layers_below)).nonzero()[0][0]
+      # REDUNDANT CHECK
+      if self.layer_lithologies[layer_number_immediately_below] == 'alluvium':
+        contacts_layer_number = layer_number_immediately_below
     tmplayer = None
     # This will work only if alluvium is in valley, not on broader surface
     if contacts_layer_number: # Are we inside any layer?
@@ -356,7 +355,7 @@ class Terrapin(object):
       self.layer_lithologies.append('alluvium')
       
     # Now have diff. topo fcn for aggrading -- need to have 2x fcn.'s?
-    self.topographicProfile(self.layer_tops)
+    #self.topographicProfile(self.layer_tops)
   
   def newAggradedTopo(self):
     topo = []
