@@ -106,16 +106,20 @@ class Terrapin(object):
     of sediments in the real world. Represent this in some way?
     """
     point = np.array([0, self.z_ch])
-    # And layer_updates holds new points that modify layers until the end,
+    # "layer_updates" holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
     chosen_layer_numbers = []
+    # breaks it somehow
+    #layer_updates.append(point)
+    #chosen_layer_numbers.append(self.insideWhichLayer(point))
     while point is not None:
       inLayer = self.insideWhichLayer(point)
       if inLayer is None:
-        sys.exit("should alluviate here! improve code!")
+        print "Exited top layer: interior alluvial valley?"
+        break
       else:
-        #print "*", inLayer
+        print "*", inLayer
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -157,9 +161,15 @@ class Terrapin(object):
       #print intersection
       self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
       
-    # Sort it in order of increasing x so it is at the proper point
+    """
     for i in range(len(layer_updates)):
       self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+    """
+      
+    # Sort it in order of increasing x so it is at the proper point
+    for i in range(len(self.layer_tops)):
+      self.layer_tops[i] = \
+           self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
 
     # And after this, adjust the right-hand-sides of the layers to hit the river
     # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
@@ -170,9 +180,10 @@ class Terrapin(object):
     # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
     # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
 
-    self.newIncisedTopo(layer_updates)
+    intermediate_topo = self.newIncisedTopo(layer_updates)
     
     # Remove points that go beyond topo profile
+    # Somehow inf points being removed here
     layer_top_index = 0
     for layer in self.layer_tops:
       row_indices = []
@@ -180,11 +191,11 @@ class Terrapin(object):
       for point in layer:
         x_point = point[0]
         y_point = point[1]
-        y_topo = self.piecewiseLinearAtX(x_point, self.topo)
+        y_topo = self.piecewiseLinearAtX(x_point, intermediate_topo)
         if y_point <= y_topo:
           pass
         else:
-          #print point
+          print point
           row_indices.append(row_index)
         row_index += 1
       self.layer_tops[layer_top_index] = \
@@ -201,8 +212,11 @@ class Terrapin(object):
     #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
     self.layer_tops[0] = \
         np.append(self.layer_tops[0], 
-                  np.expand_dims(self.topo[-1], 0),
+                  np.expand_dims(intermediate_topo[-1], 0),
                   axis=0)
+    
+    print intermediate_topo
+    self.topo = intermediate_topo[:]
     
     # Probably unnecessary
     self.layer_tops = self.rmdup(self.layer_tops)
@@ -307,8 +321,27 @@ class Terrapin(object):
       self.layer_numbers = tmp_layer_numbers[:]
       self.layer_lithologies.append('alluvium')
       
+    # Now have diff. topo fcn for aggrading -- need to have 2x fcn.'s?
     self.topographicProfile(self.layer_tops)
+  
+  def newAggradedTopo(self):
+    topo = []
+    topo.append([0, self.z_ch])
     
+    for point in layers:
+      if point[-1] >= self.z_ch:
+        topo.append(list(point))
+    # Get our -infinity
+    # OLD: topo.append(list(self.layer_tops[-1][0]))
+    # but valley fill comes after this.
+    topo.append(self.topoBCinf())
+    topo = np.array(topo)[::-1]
+    topo = self.rmdup(topo)
+    topo = topo[ topo[:,0].argsort()]
+    # Not final topo -- intermediate step.
+    # So don't update self.topo
+    return topo
+  
   def topographicProfile(self, layers):
     # Topographic profile
     # Pick only the highest points at each position
@@ -325,7 +358,7 @@ class Terrapin(object):
         layer_elevations_at_x = np.array(layer_elevations_at_x)
         layer_elevations_at_x = \
               layer_elevations_at_x[np.isnan(layer_elevations_at_x) == False]
-        if (point[1] >= np.array(layer_elevations_at_x)).all():
+        if (np.round(point[1], 10) >= np.round(np.array(layer_elevations_at_x), 10)).all():
           if (point[0] == 0) and (point[1] >= self.z_ch):
             pass
           else:
@@ -355,16 +388,35 @@ class Terrapin(object):
     self.topo = topo
     
   def newIncisedTopo(self, layers):
+    """
+    Intermediate step -- compute new topo based on given incision.
+    This is not the final topography -- but should be close.
+    """
     topo = []
     topo.append([0, self.z_ch])
     for point in layers:
       if point[-1] >= self.z_ch:
         topo.append(list(point))
-    topo.append(list(self.layer_tops[-1][0]))
+    # Get our -infinity
+    # OLD: topo.append(list(self.layer_tops[-1][0]))
+    # but valley fill comes after this.
+    topo.append(self.topoBCinf())
     topo = np.array(topo)[::-1]
     topo = self.rmdup(topo)
     topo = topo[ topo[:,0].argsort()]
-    self.topo = topo
+    # Not final topo -- intermediate step.
+    # So don't update self.topo
+    return topo
+    
+  def topoBCinf(self):
+    """
+    Provides the topography of the surface far from the model domain
+    """
+    points = np.vstack(self.layer_tops)
+    left = points[np.isinf(points[:,0])]
+    out = left[left[:,1] == np.max(left[:,1])]
+    out_ls = list(np.squeeze(out))
+    return out_ls
 
   def topoPlot(self):
     # Should make ylim 0 at start to do this properly
@@ -609,28 +661,34 @@ class Terrapin(object):
     if layers_above_point.any():
       layer_elevation_point_is_inside = \
         np.min(layer_elevations_at_point[layers_above_point])
-    # while I see the main use of this as checking for incision, thereby 
-    # making these next statements not needed, I will check if the point is
-    # at or above the highest layer
-    # MAYBE CUTOFF HERE WITH OPTION SO WE DON'T RETURN LAYER TOPS WHEN YOU REALLY
-    # WANT TO KNOW WHAT YOU'RE INSIDE, ONLY.
+      layer_number = layer_numbers[layer_elevations_at_point \
+                                   == layer_elevation_point_is_inside]
+      layer_number = int(np.mean(layer_number))
     else:
-      # See note above
+      # If neither of these, must be above everything
+      layer_elevation_point_is_inside = None
+      layer_number = None
+      
+      """      
+      # Include layer top if you're in bedrock and there is nothing above you.
+      # Otherwise, this is the end.
       with np.errstate(invalid='ignore'):
         layers_at_or_above_point = layer_elevations_at_point >= point[1]
       if layers_at_or_above_point.any():
         layer_elevation_point_is_inside = \
                         layer_elevations_at_point[layers_at_or_above_point]
+        layer_number = layer_numbers[layer_elevations_at_point \
+                                     == layer_elevation_point_is_inside]
+        layer_number = int(np.mean(layer_number))
+        if layer_number == 2:
+          layer_elevation_point_is_inside = None
+          layer_number = None
       else:
         # If neither of these, must be above everything
         layer_elevation_point_is_inside = None
         layer_number = None
-      
-    if layer_elevation_point_is_inside is not None:
-      layer_number = layer_numbers[layer_elevations_at_point \
-                                   == layer_elevation_point_is_inside]
-      layer_number = int(np.mean(layer_number))
-    
+      """      
+
     return layer_number
     
   def store_layers(self):
