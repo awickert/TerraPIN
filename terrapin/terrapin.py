@@ -193,14 +193,16 @@ class Terrapin(object):
       
     # Add points at top of layer below, to follow topography
     for i in range(1, len(self.layer_tops)):
+      #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
       self.layer_tops[i] = \
           np.append(self.layer_tops[i], 
                     np.expand_dims(self.layer_tops[i-1][-1], 0),
                     axis=0)
+    #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
     self.layer_tops[0] = \
-      np.append(self.layer_tops[0], 
-                np.expand_dims(self.topo[-1], 0),
-                axis=0)
+        np.append(self.layer_tops[0], 
+                  np.expand_dims(self.topo[-1], 0),
+                  axis=0)
     
     # Probably unnecessary
     self.layer_tops = self.rmdup(self.layer_tops)
@@ -301,11 +303,9 @@ class Terrapin(object):
                                                        # not buried under alluv
       self.layer_tops[contacts_layer_number] = tmplayer[:]
     else:
-      self.layer_tops = tmp_layer_tops
-      self.layer_numbers = tmp_layer_numbers
+      self.layer_tops = tmp_layer_tops[:]
+      self.layer_numbers = tmp_layer_numbers[:]
       self.layer_lithologies.append('alluvium')
-
-
       
     self.topographicProfile(self.layer_tops)
 
