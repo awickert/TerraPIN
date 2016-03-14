@@ -308,44 +308,6 @@ class Terrapin(object):
       self.layer_lithologies.append('alluvium')
       
     self.topographicProfile(self.layer_tops)
-
-    """
-    if tmplayer:
-      # COMBINE THIS WITH OTHER ALLUV LAYER
-      # First, find the intersection point between the two layers
-      # If it intersects here, then new layer is below
-      # (first option from above)
-      tmplayer = tmplayer[tmplayer[:,1] > intersection[1]]
-    """
-      
-    """
-    # Can skip this -- we already know how it will attach!
-    intersection = self.findIntersectionSegment(alluv_layer, tmplayer)
-    if type(intersection) is not type(None):
-      # Take only those points with a higher y-value
-      tmplayer = tmplayer[tmplayer[:,1] > intersection[1]]
-      # And then append
-      tmplayer = np.vstack((tmplayer, intersection))
-    #combilayer = np.vstack((tmplayer, aggraded_surface))
-    """
-            
-  
-    """
-      segment
-      for alluv_layer in alluv_layers:
-        for point in alluv_layer:
-          if isPointOnSegment(point, 
-    """
-      
-    """
-      tmplayer = \
-           np.vstack((self.layer_tops[top_corner_in_layer_number],
-           aggraded_surface))
-      tmplayer = tmplayer[ tmplayer[:,0].argsort()]
-self.layer_tops[top_corner_in_layer_number]    
-    
-    isPointOnSegment
-    """
     
   def topographicProfile(self, layers):
     # Topographic profile
@@ -391,13 +353,6 @@ self.layer_tops[top_corner_in_layer_number]
           topo.append(point)
     topo = np.array(topo)[::-1]
     self.topo = topo
-
-    """
-    if topo[-1][0] != 0:
-      topo.append([0, self.z_ch])
-    self.topo = np.array(topo)
-    """
-    
     
   def newIncisedTopo(self, layers):
     topo = []
@@ -410,21 +365,6 @@ self.layer_tops[top_corner_in_layer_number]
     topo = self.rmdup(topo)
     topo = topo[ topo[:,0].argsort()]
     self.topo = topo
-    """
-    topo = []
-    topo.append([0, self.z_ch])
-    for point  in layers:
-      if (point != np.array([0, self.z_ch])).all():
-        topo.append(list(point[1]))
-    topo.append(list(self.layer_tops[-1][0]))
-    topo = np.array(topo)[::-1]
-    topo = self.rmdup(topo)
-    topo = topo[ topo[:,0].argsort()]
-    self.topo = topo
-    #print self.topo
-    #print ""
-    """
-
 
   def topoPlot(self):
     # Should make ylim 0 at start to do this properly
