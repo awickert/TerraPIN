@@ -5,6 +5,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
+import sys
 
 class Terrapin(object):
   """
@@ -87,7 +88,10 @@ class Terrapin(object):
     self.z_ch_old = self.topo[-1,-1]
     self.dz = self.z_ch - self.z_ch_old
     if self.dz > 0:
-      self.aggrade()
+      if self.z_ch >= 0:
+        sys.exit("Full valley filling not supported")
+      else:
+        self.aggrade()
     elif self.dz < 0:
       self.incise()
     elif self.dz == 0:
