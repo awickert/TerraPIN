@@ -113,25 +113,43 @@ class Terrapin(object):
     # breaks it somehow
     #layer_updates.append(point)
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
+    topodefflag = False
     while point is not None:
       inLayer = self.insideWhichLayer(point)
       if inLayer is None:
         if point[1] < np.max(np.vstack(self.layer_tops)):
-          # Must be internal layer that it has exited; go horizontally
-          # until a new layer has been found
-          # Start with last layer you were in; this will break
-          # if this doesn't exist (starting above all layers -- should
-          # aggrade instead in that case!)
-          chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
-          # If above all layers -- horizontally until it hits former topo
-          newpoint = point.copy()
-          newpoint[1] = self.piecewiseLinearAtZ(point[1], self.topo)
-          chosenIntersectionion = newpoint
-          chosen_layer_numbers.append(chosen_layer_number)
-          layer_updates.append(chosenIntersectionion)
-          # Now note that chosenIntersectionion is the new starting point
-          point = chosenIntersectionion.copy()
+          if np.prod(point == np.vstack(self.layer_tops), axis=1).any():
+            # If this is the case, you are at some kind of intersecton.
+            # Pick the layer immediately below to follow.
+            # Got to make these rules more general sometime.
+            # Leave boundary -- strange things happen on it.
+            inLayer = self.insideWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
+            #higher_points = self.layer_tops[inLayer]\
+            #                [self.layer_tops[inLayer][:,1] > point[1]]
+            # AT THIS POINT, JUST TAKE THE REST OF THE TOPOGRPAHY
+            oldtopo = self.topo[self.topo[:,-1] > point[-1]]
+            topo = np.vstack((oldtopo, np.vstack(layer_updates[::-1]), np.array([0, self.z_ch])))
+            self.topo = topo.copy()
+            topodefflag = True
+            break
+          else:
+            # Must be along the top of an
+            # internal layer that it has exited; go horizontally
+            # until a new layer has been found
+            # Start with last layer you were in; this will break
+            # if this doesn't exist (starting above all layers -- should
+            # aggrade instead in that case!)
+            chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
+            # If above all layers -- horizontally until it hits former topo
+            newpoint = point.copy()
+            newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
+            chosenIntersectionion = newpoint
+            chosen_layer_numbers.append(chosen_layer_number)
+            layer_updates.append(chosenIntersectionion)
+            # Now note that chosenIntersectionion is the new starting point
+            point = chosenIntersectionion.copy()
         else:
+          print "Somehow your point is above the topography, while incising."
           break
       else:
         print "*", inLayer
@@ -168,73 +186,74 @@ class Terrapin(object):
           # Now note that chosenIntersectionion is the new starting point
           point = chosenIntersectionion.copy()
     
-    # Wait until the end to update the cross-sectional profile
-    for i in range(len(layer_updates)):
-      layer_number = chosen_layer_numbers[i]
-      intersection = layer_updates[i]
-      # Then add this into the proper layer
-      #print intersection
-      self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
-      
-    """
-    for i in range(len(layer_updates)):
-      self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
-    """
-      
-    # Sort it in order of increasing x so it is at the proper point
-    for i in range(len(self.layer_tops)):
-      self.layer_tops[i] = \
-           self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+    if topodefflag is False:
+      # Wait until the end to update the cross-sectional profile
+      for i in range(len(layer_updates)):
+        layer_number = chosen_layer_numbers[i]
+        intersection = layer_updates[i]
+        # Then add this into the proper layer
+        #print intersection
+        self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
+        
+      """
+      for i in range(len(layer_updates)):
+        self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+      """
+        
+      # Sort it in order of increasing x so it is at the proper point
+      for i in range(len(self.layer_tops)):
+        self.layer_tops[i] = \
+             self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
 
-    # And after this, adjust the right-hand-sides of the layers to hit the river
-    # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
-    #if self.layer_tops[0][-1,-1] > self.z_ch:
-    #  self.layer_tops[0][-1,-1] = self.z_ch
-      # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
-      # MOTION COME ON LINE
-    # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
-    # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
+      # And after this, adjust the right-hand-sides of the layers to hit the river
+      # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
+      #if self.layer_tops[0][-1,-1] > self.z_ch:
+      #  self.layer_tops[0][-1,-1] = self.z_ch
+        # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
+        # MOTION COME ON LINE
+      # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
+      # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
 
-    intermediate_topo = self.newIncisedTopo(layer_updates)
-    
-    # Remove points that go beyond topo profile
-    # Somehow inf points being removed here
-    layer_top_index = 0
-    for layer in self.layer_tops:
-      row_indices = []
-      row_index = 0
-      for point in layer:
-        x_point = point[0]
-        y_point = point[1]
-        y_topo = self.piecewiseLinearAtX(x_point, intermediate_topo)
-        if y_point <= y_topo:
-          pass
-        else:
-          print point
-          row_indices.append(row_index)
-        row_index += 1
-      self.layer_tops[layer_top_index] = \
-          np.delete(self.layer_tops[layer_top_index], row_indices, axis=0)
-      layer_top_index += 1
+      intermediate_topo = self.newIncisedTopo(layer_updates)
       
-    # Add points at top of layer below, to follow topography
-    for i in range(1, len(self.layer_tops)):
+      # Remove points that go beyond topo profile
+      # Somehow inf points being removed here
+      layer_top_index = 0
+      for layer in self.layer_tops:
+        row_indices = []
+        row_index = 0
+        for point in layer:
+          x_point = point[0]
+          y_point = point[1]
+          y_topo = self.piecewiseLinearAtX(x_point, intermediate_topo)
+          if y_point <= y_topo:
+            pass
+          else:
+            print point
+            row_indices.append(row_index)
+          row_index += 1
+        self.layer_tops[layer_top_index] = \
+            np.delete(self.layer_tops[layer_top_index], row_indices, axis=0)
+        layer_top_index += 1
+        
+      # Add points at top of layer below, to follow topography
+      for i in range(1, len(self.layer_tops)):
+        #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
+        self.layer_tops[i] = \
+            np.append(self.layer_tops[i], 
+                      np.expand_dims(self.layer_tops[i-1][-1], 0),
+                      axis=0)
       #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
-      self.layer_tops[i] = \
-          np.append(self.layer_tops[i], 
-                    np.expand_dims(self.layer_tops[i-1][-1], 0),
+      self.layer_tops[0] = \
+          np.append(self.layer_tops[0], 
+                    np.expand_dims(intermediate_topo[-1], 0),
                     axis=0)
-    #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
-    self.layer_tops[0] = \
-        np.append(self.layer_tops[0], 
-                  np.expand_dims(intermediate_topo[-1], 0),
-                  axis=0)
-    
-    print intermediate_topo
-    self.topo = intermediate_topo[:]
-    
-    # Probably unnecessary
-    self.layer_tops = self.rmdup(self.layer_tops)
+      
+      print intermediate_topo
+      self.topo = intermediate_topo[:]
+      
+      # Probably unnecessary
+      self.layer_tops = self.rmdup(self.layer_tops)
 
   def rmdup(self, layers):
     """
