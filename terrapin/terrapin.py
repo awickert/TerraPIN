@@ -114,7 +114,7 @@ class Terrapin(object):
     pass
   
   def channelGeometry(self):
-    
+    pass
 
   def incise(self):
     """
