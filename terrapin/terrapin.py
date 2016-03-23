@@ -33,7 +33,9 @@ class Terrapin(object):
     self.topographicProfile(self.layer_tops)
 
   def update(self):
-    self.updateTopo()
+    self.layer_tops_old = self.layer_tops.copy()
+    self.updateFluvialTopo_z()
+    self.updateFluvialTopo_y()
     #self.erode_laterally()
 
   def finalize(self):
@@ -84,7 +86,10 @@ class Terrapin(object):
     self.layer_numbers = np.array([0, 1])
     self.layer_lithologies = ['bedrock', 'alluvium']
 
-  def updateTopo(self):
+  def updateFluvialTopo_z(self):
+    """
+    Vertical incision or aggradation
+    """
     self.z_ch_old = self.topo[-1,-1]
     self.dz = self.z_ch - self.z_ch_old
     if self.dz > 0:
@@ -101,6 +106,15 @@ class Terrapin(object):
     #print self.topo
     print self.layer_tops
     print ""
+
+  def updateFluvialTopo_y(self):
+    """
+    Lateral migration
+    """
+    pass
+  
+  def channelGeometry(self):
+    
 
   def incise(self):
     """
