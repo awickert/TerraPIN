@@ -39,7 +39,7 @@ class Terrapin(object):
     #self.erode_laterally()
 
   def finalize(self):
-    pass
+    plt.show()
 
   # FUNCTIONS TO HANDLE PARTS OF THE RUNNING
   def set_input_values(self):
@@ -491,28 +491,21 @@ class Terrapin(object):
     plt.xlim((1.2*xmin, 0))
   
   def layerPlot(self)
-    #fig, ax = plt.subplots()
-    ax = plt.gca()
+    fig, ax = plt.subplots()
     points = np.vstack(self.layers)
     minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
     infinity_to_left = minx_not_inf*2 - 1
+    i=0
     for layer in self.layers:
       layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
-      shape = plt.Polygon(layer)
+      shape = plt.Polygon(layer, label=self.layer_lithologies[i])
       ax.add_patch(shape)
-      plt.axis('scaled')
-      plt.show()
-    
-    # OR ...
-    for i in range(N):
-      polygon = Polygon(np.random.rand(N, 2), True)
-      patches.append(polygon)
-
-    colors = 100*np.random.rand(len(patches))
-    p = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.4)
-    p.set_array(np.array(colors))
-    ax.add_collection(p)
-    plt.colorbar(p)
+      i+=1
+    plt.axis('scaled')
+    plt.legend()
+    #labels = self.layer_lithologies
+    #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
+    #plt.setp(legend.get_texts(), fontsize='small')
   
   def layer_boundaries(self):
     """
