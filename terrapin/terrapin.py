@@ -286,10 +286,7 @@ class Terrapin(object):
     else:
       _wasarray = False
     for layer in layers:
-      unique = np.ascontiguousarray(layer).view(np.dtype((np.void, \
-               layer.dtype.itemsize * layer.shape[1])))
-      _, idx = np.unique(unique, return_index=True)
-      layer = layer[sorted(idx)]
+      layer = self.unique_rows(layer)
       output.append(layer)
     if _wasarray:
       output = output[0]
@@ -493,6 +490,30 @@ class Terrapin(object):
     plt.ylim(( ylim_bottom, ylim_top ))
     plt.xlim((1.2*xmin, 0))
   
+  def layerPlot(self)
+    #fig, ax = plt.subplots()
+    ax = plt.gca()
+    points = np.vstack(self.layers)
+    minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
+    infinity_to_left = minx_not_inf*2 - 1
+    for layer in self.layers:
+      layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
+      shape = plt.Polygon(layer)
+      ax.add_patch(shape)
+      plt.axis('scaled')
+      plt.show()
+    
+    # OR ...
+    for i in range(N):
+      polygon = Polygon(np.random.rand(N, 2), True)
+      patches.append(polygon)
+
+    colors = 100*np.random.rand(len(patches))
+    p = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.4)
+    p.set_array(np.array(colors))
+    ax.add_collection(p)
+    plt.colorbar(p)
+  
   def layer_boundaries(self):
     """
     For each line segment:
@@ -502,7 +523,30 @@ class Terrapin(object):
     And then there is a closed boundary, and I can write methods to test what
     touches this or is inside it.
     """
+    self.layers = []
+    for layer_top in self.layer_tops:
+      highest_points_below = self.highest_points_below(layer_top)
+      # Reverse order to go from right to left -- make loop
+      layer = np.vstack((layer_top, highest_points_below[::-1]))
+      self.layers.append(layer)
   
+  def highest_points_below(self, pwl):
+    
+    highest_points_below = []
+    left = pwl[0,0]
+    right = pwl[-1,0]
+    layer_top_points = np.vstack(self.layer_tops)
+    layer_top_points = layer_top_points[(layer_top_points[:,0] >= left) *
+                                        (layer_top_points[:,0] <= right)]
+    for point in layer_top_points:
+      ztop = self.piecewiseLinearAtX(point[0], pwl)
+      if point[1] < ztop:
+        highest_points_below.append(point)
+    highest_points_below = self.unique_rows(np.vstack(highest_points_below))
+    highest_points_below = highest_points_below[highest_points_below \
+                                                [:,0].argsort()]
+    return highest_points_below
+      
   def linemesh(self):
     """
     Something like this is likely to take the job of "aggrade" and "incise"
@@ -763,6 +807,13 @@ class Terrapin(object):
       """      
 
     return layer_number
+    
+  def unique_rows(self, array):
+      unique = np.ascontiguousarray(array).view(np.dtype((np.void, \
+               array.dtype.itemsize * array.shape[1])))
+      _, idx = np.unique(unique, return_index=True)
+      layer = array[sorted(idx)]
+      return layer
     
   def store_layers(self):
     """
