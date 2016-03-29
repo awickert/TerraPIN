@@ -570,6 +570,13 @@ class Terrapin(object):
        == distance(segment[0], segment[1])
   
   def findLikelyBestIntersection(self, m, b, piecewiseLinear, starting_point):
+    """
+    Finds the closest intersection that is >= the current point and that is not 
+    the current point.
+    
+    I think that this is fully generalized, except for the note at the bottom,
+    but am not feeling sure enough -- hence "Likely" best
+    """
     intersections = self.findIntersections(m, b, piecewiseLinear)
     # First check if there is anything to work with
     if intersections.size == 0:
@@ -595,6 +602,7 @@ class Terrapin(object):
       # always going to be lowest point, so don't need full distance
       distances = []
       for point in intersections_at_or_above_point
+      But what if more than one at the same elevation -- is this possible?
       """
     return np.squeeze(np.array(intersection))
     
