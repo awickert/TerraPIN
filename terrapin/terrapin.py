@@ -124,22 +124,22 @@ class Terrapin(object):
     of sediments in the real world. Represent this in some way?
     """
     point = np.array([0, self.z_ch])
+    from_point = point.copy()
     # "layer_updates" holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
     chosen_layer_numbers = []
-    # breaks it somehow
     #layer_updates.append(point)
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
     while point is not None:
-      inLayer = self.insideWhichLayer(point)
+      inLayer = self.insideOrEnteringWhichLayer(point)
       if np.prod(point == np.vstack(self.layer_tops), axis=1).any():
         # If this is the case, you are at some kind of intersecton.
         # Pick the layer immediately below to follow.
         # Got to make these rules more general sometime.
         # Leave boundary -- strange things happen on it.
-        inLayer = self.insideWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
+        inLayer = self.insideOrEnteringWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
         #higher_points = self.layer_tops[inLayer]\
         #                [self.layer_tops[inLayer][:,1] > point[1]]
         # AT THIS POINT, JUST TAKE THE REST OF THE TOPOGRPAHY
@@ -164,6 +164,7 @@ class Terrapin(object):
           chosen_layer_numbers.append(chosen_layer_number)
           layer_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
+          from_point = point.copy()
           point = chosenIntersection.copy()
         else:
           print "Somehow your point is above the topography, while incising."
@@ -202,6 +203,7 @@ class Terrapin(object):
           chosen_layer_numbers.append(chosen_layer_number)
           layer_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
+          from_point = point.copy()
           point = chosenIntersection.copy()
     
     if topodefflag is False:
@@ -324,7 +326,9 @@ class Terrapin(object):
     # And/or see where alluvium is
     # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
     # top one should never work.
-    contacts_layer_number = self.insideWhichLayer(aggraded_surface[0])
+    contacts_layer_number = self.insideOrEnteringWhichLayer \
+                                                 (aggraded_surface[0], \
+                                                  aggraded_surface[0])
     # but this might
     if contacts_layer_number is None:
       layers_below = []
@@ -349,12 +353,16 @@ class Terrapin(object):
       for i in range(len(alluv_layer_numbers)):
         alluv_layer = alluv_layers[i]
         alluv_layer_number = alluv_layer_numbers[i]
+        from_point = alluv_layer[0].copy() # starting
         for point in alluv_layer:
-          inlayer = self.insideWhichLayer(point=point, layers=tmp_layer_tops, \
-                    layer_numbers=tmp_layer_numbers)
+          inlayer = self.insideOrEnteringWhichLayer(point=point, \
+                                          from_point=from_point, \
+                                          layers=tmp_layer_tops, \
+                                          layer_numbers=tmp_layer_numbers)
           if inlayer == tmp_layer_numbers[-1]:
             contacts_layer_number = alluv_layer_number
             tmplayer = self.layer_tops[contacts_layer_number][:]
+          from_point = point.copy()
       # In this case, layer is above -- can simply append
       # though x will make a jog back to the left, to the surprise of all!
       # (via valley geometry)
@@ -739,13 +747,13 @@ class Terrapin(object):
   def nextToWhichLayer(self, point):
     self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideWhichLayer(self, point, layers=None, layer_numbers=None):
+  def insideOrEnteringWhichLayer(self, point, from_point, layers=None, layer_numbers=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
     Because it is used to find which angle is the proper angle of repose
-    for the rock/sediment/soil/etc. above, if it is on the border between
-    two units, it will pick the upper one.
+    for the rock/sediment/soil/etc. above, it will look where the last point
+    was as well to see which layer it is entering.
     
     The importance of this script lies in the fact that each time the river 
     incises, the point will end up in the ground, and will have to project out 
@@ -759,7 +767,7 @@ class Terrapin(object):
       layers = self.layer_tops
     if layer_numbers is None:
       layer_numbers=self.layer_numbers
-      
+    
     if type(layers) == np.ndarray:
       layers = [layers]
     
@@ -767,46 +775,53 @@ class Terrapin(object):
     for i in range(len(layers)):
       layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
-
-    # Find lowest elevation above point
-    #print layer_elevations_at_point, point
-    # Get invalid value error if there is a nan, which means that the layer
-    # does not exist above that point
-    # But this will always be false anyway, so this is fine. Just suppress
-    # the error
-    with np.errstate(invalid='ignore'):
-      layers_above_point = layer_elevations_at_point > point[1]
-    if layers_above_point.any():
-      layer_elevation_point_is_inside = \
-        np.min(layer_elevations_at_point[layers_above_point])
-      layer_number = layer_numbers[layer_elevations_at_point \
-                                   == layer_elevation_point_is_inside]
-      layer_number = int(np.mean(layer_number))
-    else:
-      # If neither of these, must be above everything
-      layer_elevation_point_is_inside = None
-      layer_number = None
-      
-      """      
-      # Include layer top if you're in bedrock and there is nothing above you.
-      # Otherwise, this is the end.
+    
+    if (layer_elevations_at_point != point[1]).all():
+      # If all layer tops are above or below the point, the corresponding
+      # layer top must be the next one above the point.
+      # 
+      # If there is no such layer top, then the point is in free space.
+      #
+      # Get invalid value error if there is a nan, which means that the layer
+      # does not exist above that point
+      # But this will always be false anyway, so this is fine. Just suppress
+      # the error
       with np.errstate(invalid='ignore'):
-        layers_at_or_above_point = layer_elevations_at_point >= point[1]
-      if layers_at_or_above_point.any():
+        layers_above_point = layer_elevations_at_point > point[1]
+      if layers_above_point.any():
         layer_elevation_point_is_inside = \
-                        layer_elevations_at_point[layers_at_or_above_point]
+          np.min(layer_elevations_at_point[layers_above_point])
         layer_number = layer_numbers[layer_elevations_at_point \
                                      == layer_elevation_point_is_inside]
         layer_number = int(np.mean(layer_number))
-        if layer_number == 2:
-          layer_elevation_point_is_inside = None
-          layer_number = None
       else:
         # If neither of these, must be above everything
         layer_elevation_point_is_inside = None
         layer_number = None
-      """      
-
+    # Otherwise the point is on a layer
+    layers_at_point_elevation = (layer_elevations_at_point == point[1])
+    if point == from_point:
+      # If this is the case, then we are at the first point in the layer.
+      # The layer top exists at our position.
+      with np.errstate(invalid='ignore'):
+        # There should be only one layer at this point's x, z position
+        layer_number = self.layer_numbers[layers_at_point_elevation]
+        layer_number = int(np.mean(layer_number))
+    else:
+      # In a more general case, we need to consider the point that we are coming
+      # from, and which layer we are entering.
+      # This is because the layer being entered determines the next angle eroded
+      # through the layer, which is the main point (at least for now) of knowing
+      # which layer we are in -- so perhaps this should be changed to "in" or 
+      # "entering" in the function title
+      # Find layer boundary line going through this point,
+      # find angle of incidence of incoming line,
+      # and then find layer that is entered
+      # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
+      layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
+      
+      
+      
     return layer_number
     
   def unique_rows(self, array):
