@@ -822,7 +822,7 @@ class Terrapin(object):
       # and then find layer that is entered
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
-      if len(layer_top_number_at_point_elevation > 0):
+      if len(layer_top_number_at_point_elevation) > 1:
         sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
                  "did not yet prepare for it in the code.\n"+ \
                  "Better do that now! [mid-layer]")
@@ -831,12 +831,12 @@ class Terrapin(object):
       lty = lt[:,1]
       qualified_vertices = (ltx < point[0])
       if qualified_vertices.any():
-        left = lt[ltx == np.max(ltx[qualified_vertices]),:]
+        left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
       else:
         # If this fails, means there is no point <, so try points =
         (ltx == point[0]) * (lty > point[1])
         if qualified_vertices.any():
-          left = lt[lty == np.min(lty[qualified_vertices])]
+          left = np.squeeze(lt[lty == np.min(lty[qualified_vertices])])
         else:
           sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
                    "This has not been tested yet, so test and then remove\n"+
@@ -855,20 +855,20 @@ class Terrapin(object):
       #  by simply looking at the layer in which the origin lay, and choosing
       #  the other layer)
       if slope_layer_top < slope_line_to_point:
+        # Look below line: pick layer top
+        layer_number = self.layer_numbers[layers_at_point_elevation]
+      else:
         # If layer top decreases more steeply than line intersecting it, look
         # below the line.
-        layers_below = layer_elevations_at_point[ \
-                       (layer_elevations_at_point < point[0]) ]
-        highest_layer_below = layer_elevations_at_point == inp.max(layers_below)
-        layer_number = self.layer_numbers[highest_layer_below]
-      else:
+        layers_above = layer_elevations_at_point[ \
+                       (layer_elevations_at_point > point[1]) ]
+        lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
+        layer_number = self.layer_numbers[lowest_layer_above]
         # (even if slope_layer_top == slope_line_to_point)
-        # Look above line: pick layer top
-        layer_number = self.layer_numbers[layers_at_point_elevation]
       # Step 2: find which layers meet here
       #self.layers == points.left.any()
         
-    return layer_number
+    return int(layer_number)
     
   def unique_rows(self, array):
       unique = np.ascontiguousarray(array).view(np.dtype((np.void, \
