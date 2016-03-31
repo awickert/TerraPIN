@@ -134,21 +134,8 @@ class Terrapin(object):
     topodefflag = False
     while point is not None:
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
-      if np.prod(point == np.vstack(self.layer_tops), axis=1).any():
-        # If this is the case, you are at some kind of intersecton.
-        # Pick the layer immediately below to follow.
-        # Got to make these rules more general sometime.
-        # Leave boundary -- strange things happen on it.
-        inLayer = self.insideOrEnteringWhichLayer([point[0]-1E-5, point[1]-1E5], self.layer_tops)
-        #higher_points = self.layer_tops[inLayer]\
-        #                [self.layer_tops[inLayer][:,1] > point[1]]
-        # AT THIS POINT, JUST TAKE THE REST OF THE TOPOGRPAHY
-        oldtopo = self.topo[self.topo[:,-1] > point[-1]]
-        topo = np.vstack((oldtopo, np.vstack(layer_updates[::-1]), np.array([0, self.z_ch])))
-        self.topo = topo.copy()
-        topodefflag = True
-        break
-      elif inLayer is None:
+      from_point = point.copy()
+      if inLayer is None:
         if point[1] < np.max(np.vstack(self.layer_tops)):
           # Must be along the top of an
           # internal layer that it has exited; go horizontally
@@ -164,12 +151,12 @@ class Terrapin(object):
           chosen_layer_numbers.append(chosen_layer_number)
           layer_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
-          from_point = point.copy()
           point = chosenIntersection.copy()
         else:
           print "Somehow your point is above the topography, while incising."
           break
       else:
+        # All is normal -- carry on, cowboy/girl!
         print "*", inLayer
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
@@ -776,13 +763,27 @@ class Terrapin(object):
       layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
     
+    
+    # Need to check
+    # 1. is point above all layers? if so, error.
+    #        --> check that this works with aggradation
+    # 2. is point the first one? If so, method of getting slopes (later)
+    #        won't work, and we have to treat it differently.
+    #    We know that this is always inside a layer, so this can help.
+    #    In fact, use this as an internal test!
+    
+    # 1. Check if point is above all layers
+    #    Later move this to the end, for efficiency.
     with np.errstate(invalid='ignore'):
       layers_above_point = layer_elevations_at_point > point[1]
-    if layers_above_point.any() == False:
+      point_above_all_layers = (layer_elevations_at_point < point[1]).all()
+    if point_above_all_layers:
       # Must be above everything, the point is in free space!
       layer_elevation_point_is_inside = None
       layer_number = None
       print "Warning: POINT ABOVE ALL LAYERS!"
+    # 2. This should also work if it is the first point.
+    #    Check if this is the first point in the series
     elif (layer_elevations_at_point != point[1]).all():
       # Point does not lie on a layer top, but there should be at least
       # one layer above it.
@@ -791,9 +792,11 @@ class Terrapin(object):
       layer_number = layer_numbers[layer_elevations_at_point \
                                    == layer_elevation_point_is_inside]
       layer_number = int(np.mean(layer_number))
+    #elif (point == from_point).all():
     else:
       # Otherwise the point is on a layer
       layers_at_point_elevation = (layer_elevations_at_point == point[1])
+      """
       if (point == from_point).all():
         # If this is the case, then we are at the first point in the layer.
         # The layer top exists at our position.
@@ -801,68 +804,69 @@ class Terrapin(object):
           # There should be only one layer at this point's x, z position
           layer_number = self.layer_numbers[layers_at_point_elevation]
           try:
-            layer_number = int(np.mean(layer_number))
+            layer_number = int(layer_number)
           except:
             sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
                      "did not yet prepare for it in the code.\n"+ \
                      "Better do that now! [starting point]")
       else:
-        # In a more general case, we need to consider the point that we are coming
-        # from, and which layer we are entering.
-        # This is because the layer being entered determines the next angle eroded
-        # through the layer, which is the main point (at least for now) of knowing
-        # which layer we are in -- so perhaps this should be changed to "in" or 
-        # "entering" in the function title
-        # Find layer boundary line going through this point,
-        # find angle of incidence of incoming line,
-        # and then find layer that is entered
-        # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
-        layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
-        if len(layer_top_number_at_point_elevation > 0):
-          sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
-                   "did not yet prepare for it in the code.\n"+ \
-                   "Better do that now! [mid-layer]")
-        lt = self.layer_tops[layer_top_number_at_point_elevation]
-        ltx = lt[:,0]
-        lty = lt[:,1]
-        qualified_vertices = (ltx < point[0])
+      """
+      # In a more general case, we need to consider the point that we are coming
+      # from, and which layer we are entering.
+      # This is because the layer being entered determines the next angle eroded
+      # through the layer, which is the main point (at least for now) of knowing
+      # which layer we are in -- so perhaps this should be changed to "in" or 
+      # "entering" in the function title
+      # Find layer boundary line going through this point,
+      # find angle of incidence of incoming line,
+      # and then find layer that is entered
+      # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
+      layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
+      if len(layer_top_number_at_point_elevation > 0):
+        sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+                 "did not yet prepare for it in the code.\n"+ \
+                 "Better do that now! [mid-layer]")
+      lt = self.layer_tops[layer_top_number_at_point_elevation]
+      ltx = lt[:,0]
+      lty = lt[:,1]
+      qualified_vertices = (ltx < point[0])
+      if qualified_vertices.any():
+        left = lt[ltx == np.max(ltx[qualified_vertices]),:]
+      else:
+        # If this fails, means there is no point <, so try points =
+        (ltx == point[0]) * (lty > point[1])
         if qualified_vertices.any():
-          left = lt[ltx == np.max(ltx[qualified_vertices]),:]
+          left = lt[lty == np.min(lty[qualified_vertices])]
         else:
-          # If this fails, means there is no point <, so try points =
-          (ltx == point[0]) * (lty > point[1])
-          if qualified_vertices.any():
-            left = lt[lty == np.min(lty[qualified_vertices])]
-          else:
-            sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
-                     "This has not been tested yet, so test and then remove\n"+
-                     "this line when you know that all is working.")
-        # Find the "right" as the vertex that is just next after "left"
-        # If this doesn't work, whole sorting system has gone down!
-        left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
-        right_i = left_i + 1
-        right = lt[right_i]
-        # Step 2: Find slopes.
-        slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
-        slope_line_to_point = (point[1] - from_point[1]) / \
-                              (point[0] - from_point[0])
-        # Step 3: Use slope comparison to decide which layer to choose
-        # (Note: If only 2 layers always meet, I could have circumvented this
-        #  by simply looking at the layer in which the origin lay, and choosing
-        #  the other layer)
-        if slope_layer_top < slope_line_to_point:
-          # If layer top decreases more steeply than line intersecting it, look
-          # below the line.
-          layers_below = layer_elevations_at_point[ \
-                         (layer_elevations_at_point < point[0]) ]
-          highest_layer_below = layer_elevations_at_point == inp.max(layers_below)
-          layer_number = self.layer_numbers[highest_layer_below]
-        else:
-          # (even if slope_layer_top == slope_line_to_point)
-          # Look above line: pick layer top
-          layer_number = self.layer_numbers[layers_at_point_elevation]
-        # Step 2: find which layers meet here
-        #self.layers == points.left.any()
+          sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
+                   "This has not been tested yet, so test and then remove\n"+
+                   "this line when you know that all is working.")
+      # Find the "right" as the vertex that is just next after "left"
+      # If this doesn't work, whole sorting system has gone down!
+      left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
+      right_i = left_i + 1
+      right = lt[right_i]
+      # Step 2: Find slopes.
+      slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
+      slope_line_to_point = (point[1] - from_point[1]) / \
+                            (point[0] - from_point[0])
+      # Step 3: Use slope comparison to decide which layer to choose
+      # (Note: If only 2 layers always meet, I could have circumvented this
+      #  by simply looking at the layer in which the origin lay, and choosing
+      #  the other layer)
+      if slope_layer_top < slope_line_to_point:
+        # If layer top decreases more steeply than line intersecting it, look
+        # below the line.
+        layers_below = layer_elevations_at_point[ \
+                       (layer_elevations_at_point < point[0]) ]
+        highest_layer_below = layer_elevations_at_point == inp.max(layers_below)
+        layer_number = self.layer_numbers[highest_layer_below]
+      else:
+        # (even if slope_layer_top == slope_line_to_point)
+        # Look above line: pick layer top
+        layer_number = self.layer_numbers[layers_at_point_elevation]
+      # Step 2: find which layers meet here
+      #self.layers == points.left.any()
         
     return layer_number
     
