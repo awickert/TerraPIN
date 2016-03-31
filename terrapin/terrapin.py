@@ -852,16 +852,23 @@ class Terrapin(object):
       slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
       slope_line_to_point = (point[1] - from_point[1]) / \
                              point[0] - from_point[0])
+      # Step 3: Use slope comparison to decide which layer to choose
+      # (Note: If only 2 layers always meet, I could have circumvented this
+      #  by simply looking at the layer in which the origin lay, and choosing
+      #  the other layer)
       if slope_layer_top < slope_line_to_point:
         # If layer top decreases more steeply than line intersecting it, look
         # below the line.
+        layers_below = layer_elevations_at_point[ \
+                       (layer_elevations_at_point < point[0]) ]
+        highest_layer_below = layer_elevations_at_point == np.max(layers_below)
+        layer_number = self.layer_numbers[highest_layer_below]
       else:
         # (even if slope_layer_top == slope_line_to_point)
         # Look above line: pick layer top
-        layer_number = 
+        layer_number = self.layer_numbers[layers_at_point_elevation]
       # Step 2: find which layers meet here
       #self.layers == points.left.any()
-      
       
     return layer_number
     
