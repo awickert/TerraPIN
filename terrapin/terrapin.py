@@ -747,7 +747,7 @@ class Terrapin(object):
   def nextToWhichLayer(self, point):
     self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideOrEnteringWhichLayer(self, point, from_point):
+  def insideOrEnteringWhichLayer(self, point, from_point, layers=None, layer_numbers=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -759,7 +759,14 @@ class Terrapin(object):
     incises, the point will end up in the ground, and will have to project out 
     of that. In plausible cases, it might end up projecting back up through 
     multiple materials.
+    
+    Defaults to work on the standard list of layers.
     """
+    
+    if layers is None:
+      layers = self.layer_tops
+    if layer_numbers is None:
+      layer_numbers=self.layer_numbers
     
     if type(layers) == np.ndarray:
       layers = [layers]
