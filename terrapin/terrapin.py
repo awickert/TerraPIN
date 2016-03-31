@@ -806,7 +806,12 @@ class Terrapin(object):
       with np.errstate(invalid='ignore'):
         # There should be only one layer at this point's x, z position
         layer_number = self.layer_numbers[layers_at_point_elevation]
-        layer_number = int(np.mean(layer_number))
+        try:
+          layer_number = int(np.mean(layer_number))
+        except:
+          sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+                   "did not yet prepare for it in the code.\n"+ \
+                   "Better do that now! [starting point]")
     else:
       # In a more general case, we need to consider the point that we are coming
       # from, and which layer we are entering.
@@ -819,7 +824,43 @@ class Terrapin(object):
       # and then find layer that is entered
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
-      
+      if len(layer_top_number_at_point_elevation > 0):
+        sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+                 "did not yet prepare for it in the code.\n"+ \
+                 "Better do that now! [mid-layer]")
+      lt = self.layer_tops[layer_top_number_at_point_elevation]
+      ltx = lt[:,0]
+      lty = lt[:,1]
+      qualified_vertices = (ltx < point[0])
+      if qualified_vertices.any():
+        left = lt[ltx == np.max(ltx[qualified_vertices]),:]
+      else:
+        # If this fails, means there is no point <, so try points =
+        (ltx == point[0]) * (lty > point[1])
+        if qualified_vertices.any():
+          left = lt[lty == np.min(lty[qualified_vertices])]
+        else:
+          sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
+                   "This has not been tested yet, so test and then remove\n"+
+                   "this line when you know that all is working.")
+      # Find the "right" as the vertex that is just next after "left"
+      # If this doesn't work, whole sorting system has gone down!
+      left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
+      right_i = left_i + 1
+      right = lt[right_i]
+      # Step 2: Find slopes.
+      slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
+      slope_line_to_point = (point[1] - from_point[1]) / \
+                             point[0] - from_point[0])
+      if slope_layer_top < slope_line_to_point:
+        # If layer top decreases more steeply than line intersecting it, look
+        # below the line.
+      else:
+        # (even if slope_layer_top == slope_line_to_point)
+        # Look above line: pick layer top
+        layer_number = 
+      # Step 2: find which layers meet here
+      #self.layers == points.left.any()
       
       
     return layer_number
