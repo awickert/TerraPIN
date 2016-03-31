@@ -860,15 +860,19 @@ class Terrapin(object):
       else:
         # If layer top decreases more steeply than line intersecting it, look
         # below the line.
-        layers_above = layer_elevations_at_point[ \
-                       (layer_elevations_at_point > point[1]) ]
-        lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
-        layer_number = self.layer_numbers[lowest_layer_above]
-        # (even if slope_layer_top == slope_line_to_point)
+        layers_above = layer_elevations_at_point[
+                       layer_elevations_at_point > point[1] ]
+        if len(layers_above) == 0:
+          layer_number = None # entering free space -- other code should
+                              # take this along the top of the domain
+        else:
+          lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
+          layer_number = int(self.layer_numbers[lowest_layer_above])
+          # (even if slope_layer_top == slope_line_to_point)
       # Step 2: find which layers meet here
       #self.layers == points.left.any()
         
-    return int(layer_number)
+    return layer_number
     
   def unique_rows(self, array):
       unique = np.ascontiguousarray(array).view(np.dtype((np.void, \
