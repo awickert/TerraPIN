@@ -105,7 +105,8 @@ class Terrapin(object):
     else:
       sys.exit("Warning: dz is not finite")
     #print self.topo
-    print self.layer_tops
+    for layer_top in self.layer_tops:
+      print layer_top
     print ""
 
   def updateFluvialTopo_y(self):
@@ -174,7 +175,6 @@ class Terrapin(object):
           chosen_layer_numbers.append(chosen_layer_number)
           layer_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
-          from_point = point.copy()
           point = chosenIntersection.copy()
     
     if topodefflag is False:
@@ -647,9 +647,18 @@ class Terrapin(object):
       # First, define line segment of interest
       xmin_pwl = np.max( pwl[:,0][pwl[:,0] <= x] )
       xmax_pwl = np.min( pwl[:,0][pwl[:,0] >= x] )
-      # THIS IS AN ERROR WAITING TO HAPPEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      z_xmin_pwl = np.mean(pwl[:,1][pwl[:,0] == xmin_pwl]) # in case two have it
-      z_xmax_pwl = np.mean(pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
+      z_xmin_pwl = (pwl[:,1][pwl[:,0] == xmin_pwl])
+      if len(z_xmin_pwl) > 1:
+        if (z_xmin_pwl == z_xmin_pwl[0]).all():
+          z_xmin_pwl = z_xmin_pwl[0]
+        else:
+          sys.exit(">1 possible point at x; not a function!")
+      z_xmax_pwl = (pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
+      if len(z_xmax_pwl) > 1:
+        if (z_xmax_pwl == z_xmax_pwl[0]).all():
+          z_xmax_pwl = z_xmax_pwl[0]
+        else:
+          sys.exit(">1 possible point at x; not a function!")
       if xmin_pwl == xmax_pwl:
         z = z_xmin_pwl
       else:
@@ -658,8 +667,8 @@ class Terrapin(object):
         # using max to avoid -inf
         b = z_xmax_pwl - m*xmax_pwl
         z = m*x + b
-      
-    return z
+
+    return float(z)
     
   def piecewiseLinearAtZ(self, z, pwl):
     """
