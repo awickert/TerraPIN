@@ -134,7 +134,6 @@ class Terrapin(object):
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
     while point is not None:
-      #print self.layer_tops
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
@@ -143,7 +142,6 @@ class Terrapin(object):
         point = None # break out of loop.
       else:
         # All is normal -- carry on, cowboy/girl!
-        #print "*", inLayer
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -181,31 +179,50 @@ class Terrapin(object):
     
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
-      print self.layer_tops        
-      for i in range(len(layer_updates)):
-        layer_number = chosen_layer_numbers[i]
-        intersection = layer_updates[i]
-        # Then add this into the proper layer
-        #print intersection
-        self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
-        
-      # Sort it in order of increasing x so it is at the proper point
+
+      self.topo = self.newIncisedTopo(layer_updates)
+
+      # Vertices from topo must be added to layer tops
       for i in range(len(self.layer_tops)):
-        self.layer_tops[i] = \
-             self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
+        layer_top = self.layer_tops[i]
+        for topo_point in self.topo:
+          x_topo = topo_point[0]
+          y_topo = topo_point[1]
+          y_layer = self.piecewiseLinearAtX(x_topo, layer_top)
+          if (y_topo <= y_layer):
+            print topo_point
+            self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
 
-      # And after this, adjust the right-hand-sides of the layers to hit the river
-      # NOT SURE THAT THIS IS REALLY NECESSARY -- LAYER VS. TOPOGRAPHIC SURFACE
-      #if self.layer_tops[0][-1,-1] > self.z_ch:
-      #  self.layer_tops[0][-1,-1] = self.z_ch
-        # MAY HAVE TO ADD IN A SECOND POINT HERE ONCE TERRACES / LATERAL
-        # MOTION COME ON LINE
-      # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
-      # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
+      # Layers must be at the minimum elevation at each point
+      for i in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[i]
+        final_points = []
+        _x_values = list(set(layer_top[:,0]))
+        for _x in _x_values:
+          _y = np.min(layer_top[:,1][layer_top[:,0] == _x])
+          final_points.append([_x,_y])
+        layer_top = np.array(final_points)
+        self.layer_tops[i] = layer_top # necessary?
+        
+      """
+      # Layers can be no higher than topo
+      for layer_top in self.layer_tops:
+        for i in range(len(layer_top)):
+          point = layer_top[i]
+          x_layer = point[0]
+          y_layer = point[1]
+          y_topo = self.piecewiseLinearAtX(x_layer, self.topo)
+          # Find which is lower -- current point or that given by topo.
+          # Replace it if it is topo.
+          # nanmin so we can always keep real value that goes outside
+          layer_top[i,1] = np.nanmin(( y_layer, y_topo ))
+      """
 
-      #layer_updates_array = np.vstack(layer_updates)
-      intermediate_topo = self.newIncisedTopo(layer_updates)
-      
+      # Then sort it all
+      for layer_top in self.layer_tops:
+        layer_top = layer_top[ layer_top[:,0].argsort()]
+
+      """
       # Remove points that go beyond topo profile
       # Somehow inf points being removed here
       layer_top_index = 0
@@ -215,35 +232,27 @@ class Terrapin(object):
         for point in layer:
           x_point = point[0]
           y_point = point[1]
-          y_topo = self.piecewiseLinearAtX(x_point, intermediate_topo)
+          y_topo = self.piecewiseLinearAtX(x_point, self.topo)
           if y_point <= y_topo:
             pass
           else:
-            #print point
             row_indices.append(row_index)
           row_index += 1
         self.layer_tops[layer_top_index] = \
             np.delete(self.layer_tops[layer_top_index], row_indices, axis=0)
         layer_top_index += 1
-        
-      # Add points at top of layer below, to follow topography
-      for i in range(1, len(self.layer_tops)):
-        #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
-        self.layer_tops[i] = \
-            np.append(self.layer_tops[i], 
-                      np.expand_dims(self.layer_tops[i-1][-1], 0),
-                      axis=0)
-      #if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
-      self.layer_tops[0] = \
-          np.append(self.layer_tops[0], 
-                    np.expand_dims(intermediate_topo[-1], 0),
-                    axis=0)
+
       
-      #print intermediate_topo
+      # Make sure that layer tops end appropriately in topo
+      # By modifying or adding in points
+      # Not sure why I have this and the above -- CRUFT ALERT!
+      if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
+      
       self.topo = intermediate_topo[:]
       
       # Probably unnecessary
       self.layer_tops = self.rmdup(self.layer_tops)
+      """
 
   def rmdup(self, layers):
     """
@@ -354,12 +363,10 @@ class Terrapin(object):
     # Topographic profile
     # Pick only the highest points at each position
     topo = []
-    #allpoints = np.concatenate(layers[::-1])
     topoPoints = []
     for layer in layers:
       layerPoints = []
       for point in layer:
-        #print point
         layer_elevations_at_x = []
         for layer in layers:
           layer_elevations_at_x.append( self.piecewiseLinearAtX(point[0], layer) )
@@ -380,7 +387,6 @@ class Terrapin(object):
     # Backwards (i.e. topmost first); pick first point seen
     for i in range(len(topoPoints)):
       layerPoints = topoPoints[i]
-      #print layerPoints.ndim == 1
       if layerPoints.ndim == 1:
         layerPoints = np.expand_dims(layerPoints, 0)
       for point in layerPoints:
@@ -427,10 +433,8 @@ class Terrapin(object):
     return out_ls
 
   def topoPlot(self, linestyle='-'):
-    #print kwargs
     # Should make ylim 0 at start to do this properly
     topoFinite = self.topo.copy()
-    #print topoFinite
     if np.isinf(topoFinite).any():
       if len(topoFinite) > 2:
         xmin = self.topo[1,0]
@@ -801,9 +805,6 @@ class Terrapin(object):
       self.lty = lty
       self.qualified_vertices = qualified_vertices
       self.point = point
-      #print 'ltx', ltx
-      #print 'lty', lty
-      #print qualified_vertices
       if qualified_vertices.any():
         left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
       else:
@@ -840,7 +841,7 @@ class Terrapin(object):
       print slope_line_to_point
       if slope_layer_top < slope_line_to_point:
         # Look below line: pick layer top
-        print layers_at_point_elevation
+        #print layers_at_point_elevation
         layer_number = self.layer_numbers[layers_at_point_elevation]
       else:
         # If layer top decreases more steeply than line intersecting it, look
