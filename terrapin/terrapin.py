@@ -182,6 +182,22 @@ class Terrapin(object):
 
       self.topo = self.newIncisedTopo(layer_updates)
 
+      # Find bottoms of geologic layers at x=0
+      # This is to ensure we don't incise past these
+      layer_tops_at_x0 = []
+      for j in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[j]
+        layer_tops_at_x0.append( self.piecewiseLinearAtX(0, layer_top) )
+      layer_tops_at_x0 = np.array(layer_tops_at_x0)
+      _y_layer_bottom = []
+      for i in range(len(layer_tops_at_x0)):
+        try:
+          _y_layer_bottom.append(np.max(layer_tops_at_x0[ \
+                                 layer_tops_at_x0 < layer_tops_at_x0[i]]))
+        except:
+          _y_layer_bottom.append(-np.inf)
+      #y_at_layers = np.array(y_at_layer)
+
       # Vertices from topo must be added to layer tops
       for i in range(len(self.layer_tops)):
         layer_top = self.layer_tops[i]
@@ -192,17 +208,29 @@ class Terrapin(object):
           if (y_topo <= y_layer):
             print topo_point
             self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
-
+      
+      # Must check where channel incises through multiple layers, and ensure
+      # that no layer is incised beyond its bottom
+      # (I do this below: ensure that it is not too deep)
+      
       # Layers must be at the minimum elevation at each point
+      # Minimum calculated between:
+      #    - Layer elevation at point
+      #    - Topography at point
+      #    - Elevation of next layer below at point
       for i in range(len(self.layer_tops)):
         layer_top = self.layer_tops[i]
         final_points = []
         _x_values = list(set(layer_top[:,0]))
         for _x in _x_values:
+          _y_in_layer = layer_top[:,1][layer_top[:,0] == _x]
           _y = np.min(layer_top[:,1][layer_top[:,0] == _x])
+          # Ensure that it is not too deep
+          if _x == 0:
+            _y = np.max((_y, _y_layer_bottom[i]))
           final_points.append([_x,_y])
         layer_top = np.array(final_points)
-        self.layer_tops[i] = layer_top # necessary?
+        self.layer_tops[i] = layer_top
       
       # Then sort it all
       for i in range(len(self.layer_tops)):
@@ -619,6 +647,7 @@ class Terrapin(object):
       # First, define line segment of interest
       xmin_pwl = np.max( pwl[:,0][pwl[:,0] <= x] )
       xmax_pwl = np.min( pwl[:,0][pwl[:,0] >= x] )
+      # THIS IS AN ERROR WAITING TO HAPPEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       z_xmin_pwl = np.mean(pwl[:,1][pwl[:,0] == xmin_pwl]) # in case two have it
       z_xmax_pwl = np.mean(pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
       if xmin_pwl == xmax_pwl:
