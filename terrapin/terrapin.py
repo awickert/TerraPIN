@@ -398,6 +398,37 @@ class Terrapin(object):
     Intermediate step -- compute new topo based on given incision.
     This is not the final topography -- but should be close.
     """
+
+    #self.topo[:-1][self.topo[:-1,0] > np.max(layers[:,0])], \
+                           
+    # 1. Add new channel
+    layers = np.array(layers)
+    print 'layers\n',layers
+    print '***', np.max(layers[:,0]), np.min(layers[:,0])
+    topo = np.vstack(( self.topo[self.topo[:,0] < np.min(layers[:,0])], \
+                       np.array([[0, self.z_ch]]) ))
+    
+    # 2. Add other computed points (intersections)
+    topotmp = self.topo.copy()
+    for point in layers:
+      y_topo_at_point = self.piecewiseLinearAtX(point[0], topotmp)
+      #if point[1] <= y_topo_at_point:
+      topo = np.vstack(( topo, point)) # probably slow
+    
+    # 3. Place in order    
+    topo = topo[topo[:,0].argsort()]
+    print '***', topo
+
+    # 4. Then check for unnecesssary points and remove them
+    slopes = np.diff(topo[:,1]) / np.diff(topo[:,0])
+    # Those with constant slopes on both sides are not needed
+    not_needed = np.hstack(( False, slopes[:-1] == slopes[1:], False ))
+    topo = topo[not_needed == False]
+      
+    return topo
+
+    """
+    topo = self.topo
     topo = []
     topo.append([0, self.z_ch])
     for point in layers:
@@ -413,6 +444,7 @@ class Terrapin(object):
     # Not final topo -- intermediate step.
     # So don't update self.topo
     return topo
+    """
     
   def topoBCinf(self):
     """
