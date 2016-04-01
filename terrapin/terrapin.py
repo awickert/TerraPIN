@@ -6,6 +6,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import sys
+import fnmatch
 
 class Terrapin(object):
   """
@@ -138,19 +139,7 @@ class Terrapin(object):
       from_point = point.copy()
       if inLayer is None:
         # Above all? Then should be at the top.
-        # No longer recreating the starting point here
-        """
-        chosen_layer_number = chosen_layer_numbers[-1] # not necessary, still saved
-        # If above all layers -- horizontally until it hits former topo
-        newpoint = point.copy()
-        # Get topo at this point
-        newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
-        print newpoint
-        chosenIntersection = newpoint
-        chosen_layer_numbers.append(chosen_layer_number)
-        layer_updates.append(chosenIntersection)
-        # Now note that chosenIntersection is the new starting point
-        """
+        # After going above topographic surface, nothing to do.
         point = None # break out of loop.
       else:
         # All is normal -- carry on, cowboy/girl!
@@ -199,11 +188,6 @@ class Terrapin(object):
         # Then add this into the proper layer
         #print intersection
         self.layer_tops[layer_number] = np.vstack(( self.layer_tops[layer_number], np.expand_dims(intersection, 0) ))
-        
-      """
-      for i in range(len(layer_updates)):
-        self.layer_tops[i] = self.layer_tops[i][ self.layer_tops[i][:,0].argsort()]
-      """
         
       # Sort it in order of increasing x so it is at the proper point
       for i in range(len(self.layer_tops)):
@@ -296,6 +280,10 @@ class Terrapin(object):
     If above the valley (i.e. flat plain), (should just disperse sediment 
     over some distance. But for now will just error out.
     """
+    
+    ############################
+    # Horizontal alluvial fill #
+    ############################
     x_valley_wall = self.piecewiseLinearAtZ(self.z_ch, self.topo)
     aggraded_surface = np.array([[x_valley_wall, self.z_ch],
                                  [0, self.z_ch]])
@@ -303,68 +291,46 @@ class Terrapin(object):
     topo = np.vstack((oldtopo, aggraded_surface))
     self.topo = topo.copy()
 
+    ######################################################
+    # Check if we are adjacent to another alluvial layer #
+    ######################################################
+    
+    # 1. Mark alluvial layers
     layer_is_alluvium = np.array(self.layer_lithologies) == 'alluvium'
     # Need to specify axis -- DEPRECATION WARNING
     alluv_layers = list(np.array(self.layer_tops)[layer_is_alluvium])
     alluv_layer_numbers = self.layer_numbers[layer_is_alluvium]
     
-    # And then see if any of this is alluvium
-    # And/or see where alluvium is
-    # SPACE HERE TO ADD A NEW LAYER OR INCORPORATE IT INTO OTHERS
-    # top one should never work.
+    # 2. Find number of adjacent layer
     contacts_layer_number = self.insideOrEnteringWhichLayer \
                                                  (aggraded_surface[0], \
-                                                  aggraded_surface[0])
-    # but this might
+                                                  aggraded_surface[1])
+
+    # 3. Do a check that alluvium touches a layer
     if contacts_layer_number is None:
-      layers_below = []
-      for layer in self.layer_tops:
-        layers_below.append(self.piecewiseLinearAtX(0, layer))
-      layer_number_immediately_below = (layers_below == \
-                                    np.nanmax(layers_below)).nonzero()[0][0]
-      # REDUNDANT CHECK
-      if self.layer_lithologies[layer_number_immediately_below] == 'alluvium':
-        contacts_layer_number = layer_number_immediately_below
-    tmplayer = None
-    # This will work only if alluvium is in valley, not on broader surface
-    if contacts_layer_number: # Are we inside any layer?
-      if self.layer_lithologies[contacts_layer_number] == 'alluvium':
-        tmplayer = self.layer_tops[contacts_layer_number][:]
-      # If it intersects here, then new layer is below
+      sys.exit("Alluvium spilling out of valley?")
+
+    # 4. Find if adjacent layer is alluvium
+    #    If it is, append it.
+    if self.layer_lithologies[contacts_layer_number] == 'alluvium':
+      tmplayer = self.layer_tops[contacts_layer_number][:]
       tmplayer = tmplayer[tmplayer[:,1] > aggraded_surface[0,1]]
-    else:
-      tmp_layer_tops = self.layer_tops[:]
-      tmp_layer_tops.append(aggraded_surface)
-      tmp_layer_numbers = np.arange(len(self.layer_numbers)+1)
-      for i in range(len(alluv_layer_numbers)):
-        alluv_layer = alluv_layers[i]
-        alluv_layer_number = alluv_layer_numbers[i]
-        from_point = alluv_layer[0].copy() # starting
-        for point in alluv_layer:
-          inlayer = self.insideOrEnteringWhichLayer(point=point, \
-                                          from_point=from_point, \
-                                          layers=tmp_layer_tops, \
-                                          layer_numbers=tmp_layer_numbers)
-          if inlayer == tmp_layer_numbers[-1]:
-            contacts_layer_number = alluv_layer_number
-            tmplayer = self.layer_tops[contacts_layer_number][:]
-          from_point = point.copy()
-      # In this case, layer is above -- can simply append
-      # though x will make a jog back to the left, to the surprise of all!
-      # (via valley geometry)
-    if tmplayer is not None:
-      # COMBINE THIS WITH OTHER ALLUV LAYER
       tmplayer = np.vstack((tmplayer, aggraded_surface))
       tmplayer = tmplayer[tmplayer[:,-1] >= self.z_ch] # take only points
                                                        # not buried under alluv
       self.layer_tops[contacts_layer_number] = tmplayer[:]
+    #    If it is not, make a new layer out of it
     else:
-      self.layer_tops = tmp_layer_tops[:]
-      self.layer_numbers = tmp_layer_numbers[:]
+      self.layer_tops.append(aggraded_surface)
+      self.layer_numbers = np.arange(len(self.layer_numbers)+1)
       self.layer_lithologies.append('alluvium')
-      
-    # Now have diff. topo fcn for aggrading -- need to have 2x fcn.'s?
-    #self.topographicProfile(self.layer_tops)
+      number_of_layers_of_alluvium = len(fnmatch.filter(self.layer_names, 'alluvium*'))
+      self.layer_names.append('alluvium_'+str(number_of_layers_of_alluvium))
+    # 5. (For the future): Find if you have re-connected two separated layers
+    #    of alluvium. If you have, connect them. Should write a check here to
+    #    use self.layers to see if any points are shared.
+    #    OR even simplify this whole thing by always making that check!
+    #    Points shared -- any parts of borders touching!
   
   def newAggradedTopo(self):
     topo = []
@@ -855,18 +821,26 @@ class Terrapin(object):
       right_i = left_i + 1
       right = lt[right_i]
       # Step 2: Find slopes.
+      print 'from_point', from_point
       if from_point is not None:
         slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
-        slope_line_to_point = (point[1] - from_point[1]) / \
-                              (point[0] - from_point[0])
+        if (point[0] - from_point[0]) == 0:
+          slope_line_to_point = -np.inf
+        else:
+          slope_line_to_point = (point[1] - from_point[1]) / \
+                                (point[0] - from_point[0])
       else:
         sys.exit("A from_point is needed here")
       # Step 3: Use slope comparison to decide which layer to choose
       # (Note: If only 2 layers always meet, I could have circumvented this
       #  by simply looking at the layer in which the origin lay, and choosing
       #  the other layer)
+      print 'slopes',
+      print slope_layer_top,
+      print slope_line_to_point
       if slope_layer_top < slope_line_to_point:
         # Look below line: pick layer top
+        print layers_at_point_elevation
         layer_number = self.layer_numbers[layers_at_point_elevation]
       else:
         # If layer top decreases more steeply than line intersecting it, look
