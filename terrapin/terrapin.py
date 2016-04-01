@@ -203,56 +203,20 @@ class Terrapin(object):
           final_points.append([_x,_y])
         layer_top = np.array(final_points)
         self.layer_tops[i] = layer_top # necessary?
-        
-      """
-      # Layers can be no higher than topo
-      for layer_top in self.layer_tops:
-        for i in range(len(layer_top)):
-          point = layer_top[i]
-          x_layer = point[0]
-          y_layer = point[1]
-          y_topo = self.piecewiseLinearAtX(x_layer, self.topo)
-          # Find which is lower -- current point or that given by topo.
-          # Replace it if it is topo.
-          # nanmin so we can always keep real value that goes outside
-          layer_top[i,1] = np.nanmin(( y_layer, y_topo ))
-      """
-
+      
       # Then sort it all
-      for layer_top in self.layer_tops:
-        layer_top = layer_top[ layer_top[:,0].argsort()]
+      for i in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[i]
+        self.layer_tops[i] = layer_top[layer_top[:,0].argsort()]
 
-      """
-      # Remove points that go beyond topo profile
-      # Somehow inf points being removed here
-      layer_top_index = 0
-      for layer in self.layer_tops:
-        row_indices = []
-        row_index = 0
-        for point in layer:
-          x_point = point[0]
-          y_point = point[1]
-          y_topo = self.piecewiseLinearAtX(x_point, self.topo)
-          if y_point <= y_topo:
-            pass
-          else:
-            row_indices.append(row_index)
-          row_index += 1
-        self.layer_tops[layer_top_index] = \
-            np.delete(self.layer_tops[layer_top_index], row_indices, axis=0)
-        layer_top_index += 1
-
+      # Then check for unnecesssary points and remove them
+      for i in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[i]
+        slopes = np.diff(layer_top[:,1]) / np.diff(layer_top[:,0])
+        # Those with constant slopes on both sides are not needed
+        not_needed = np.hstack(( False, slopes[:-1] == slopes[1:], False ))
+        self.layer_tops[i] = self.layer_tops[i][not_needed == False]
       
-      # Make sure that layer tops end appropriately in topo
-      # By modifying or adding in points
-      # Not sure why I have this and the above -- CRUFT ALERT!
-      if self.piecewiseLinearAtX(x_point, self.layer_tops[0]) < self.topo[-1][1]:
-      
-      self.topo = intermediate_topo[:]
-      
-      # Probably unnecessary
-      self.layer_tops = self.rmdup(self.layer_tops)
-      """
 
   def rmdup(self, layers):
     """
