@@ -124,7 +124,7 @@ class Terrapin(object):
     of sediments in the real world. Represent this in some way?
     """
     point = np.array([0, self.z_ch])
-    from_point = point.copy()
+    from_point = None # NULL in future
     # "layer_updates" holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
     layer_updates = []
@@ -133,31 +133,28 @@ class Terrapin(object):
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
     while point is not None:
+      #print self.layer_tops
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
-        if point[1] < np.max(np.vstack(self.layer_tops)):
-          # Must be along the top of an
-          # internal layer that it has exited; go horizontally
-          # until a new layer has been found
-          # Start with last layer you were in; this will break
-          # if this doesn't exist (starting above all layers -- should
-          # aggrade instead in that case!)
-          chosen_layer_number = chosen_layer_numbers[-1] # not even necessary -- still saved
-          # If above all layers -- horizontally until it hits former topo
-          newpoint = point.copy()
-          newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
-          chosenIntersection = newpoint
-          chosen_layer_numbers.append(chosen_layer_number)
-          layer_updates.append(chosenIntersection)
-          # Now note that chosenIntersection is the new starting point
-          point = chosenIntersection.copy()
-        else:
-          print "Somehow your point is above the topography, while incising."
-          break
+        # Above all? Then should be at the top.
+        # No longer recreating the starting point here
+        """
+        chosen_layer_number = chosen_layer_numbers[-1] # not necessary, still saved
+        # If above all layers -- horizontally until it hits former topo
+        newpoint = point.copy()
+        # Get topo at this point
+        newpoint[0] = self.piecewiseLinearAtZ(point[1], self.topo)
+        print newpoint
+        chosenIntersection = newpoint
+        chosen_layer_numbers.append(chosen_layer_number)
+        layer_updates.append(chosenIntersection)
+        # Now note that chosenIntersection is the new starting point
+        """
+        point = None # break out of loop.
       else:
         # All is normal -- carry on, cowboy/girl!
-        print "*", inLayer
+        #print "*", inLayer
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -195,6 +192,7 @@ class Terrapin(object):
     
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
+      print self.layer_tops        
       for i in range(len(layer_updates)):
         layer_number = chosen_layer_numbers[i]
         intersection = layer_updates[i]
@@ -221,6 +219,7 @@ class Terrapin(object):
       # NEED TO DEFINE TOPOGRAPHIC SURFACE SOMEWHERE
       # CHANNEL, VALLEY WALL, AND EACH FARTHEST RIGHT POINT ON EACH LAYER TOP
 
+      #layer_updates_array = np.vstack(layer_updates)
       intermediate_topo = self.newIncisedTopo(layer_updates)
       
       # Remove points that go beyond topo profile
@@ -236,7 +235,7 @@ class Terrapin(object):
           if y_point <= y_topo:
             pass
           else:
-            print point
+            #print point
             row_indices.append(row_index)
           row_index += 1
         self.layer_tops[layer_top_index] = \
@@ -256,7 +255,7 @@ class Terrapin(object):
                     np.expand_dims(intermediate_topo[-1], 0),
                     axis=0)
       
-      print intermediate_topo
+      #print intermediate_topo
       self.topo = intermediate_topo[:]
       
       # Probably unnecessary
@@ -734,7 +733,7 @@ class Terrapin(object):
   def nextToWhichLayer(self, point):
     self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideOrEnteringWhichLayer(self, point, from_point, layers=None, layer_numbers=None):
+  def insideOrEnteringWhichLayer(self, point, from_point=None, layers=None, layer_numbers=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -750,6 +749,8 @@ class Terrapin(object):
     Defaults to work on the standard list of layers.
     """
     
+    print 'point', point
+
     if layers is None:
       layers = self.layer_tops
     if layer_numbers is None:
@@ -830,6 +831,13 @@ class Terrapin(object):
       ltx = lt[:,0]
       lty = lt[:,1]
       qualified_vertices = (ltx < point[0])
+      self.ltx = ltx
+      self.lty = lty
+      self.qualified_vertices = qualified_vertices
+      self.point = point
+      #print 'ltx', ltx
+      #print 'lty', lty
+      #print qualified_vertices
       if qualified_vertices.any():
         left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
       else:
@@ -847,9 +855,12 @@ class Terrapin(object):
       right_i = left_i + 1
       right = lt[right_i]
       # Step 2: Find slopes.
-      slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
-      slope_line_to_point = (point[1] - from_point[1]) / \
-                            (point[0] - from_point[0])
+      if from_point is not None:
+        slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
+        slope_line_to_point = (point[1] - from_point[1]) / \
+                              (point[0] - from_point[0])
+      else:
+        sys.exit("A from_point is needed here")
       # Step 3: Use slope comparison to decide which layer to choose
       # (Note: If only 2 layers always meet, I could have circumvented this
       #  by simply looking at the layer in which the origin lay, and choosing
