@@ -292,6 +292,19 @@ class Terrapin(object):
     topo = np.vstack((oldtopo, aggraded_surface))
     self.topo = topo.copy()
 
+    # Add this to the list of layers
+    self.layer_tops.append(aggraded_surface)
+    self.layer_numbers = np.arange(len(self.layer_numbers)+1)
+    self.layer_lithologies.append('alluvium')
+    number_of_layers_of_alluvium = len(fnmatch.filter(self.layer_names, 'alluvium*'))
+    new_layer_name = 'alluvium_'+str(number_of_layers_of_alluvium)
+    self.layer_names.append(new_layer_name)
+    
+    #######################################
+    # Combine adjacent layers of alluvium #
+    #######################################
+    #touching_layers = self.layersTouchedByLayer(new_layer_name)
+
     ######################################################
     # Check if we are adjacent to another alluvial layer #
     ######################################################
@@ -312,6 +325,8 @@ class Terrapin(object):
       sys.exit("Alluvium spilling out of valley?")
 
     # 4. Find if adjacent layer is alluvium
+    
+    
     #    If it is, append it.
     if self.layer_lithologies[contacts_layer_number] == 'alluvium':
       tmplayer = self.layer_tops[contacts_layer_number][:]
@@ -333,6 +348,35 @@ class Terrapin(object):
     #    OR even simplify this whole thing by always making that check!
     #    Points shared -- any parts of borders touching!
   
+  def layersTouchedByLayer(layer_name_or_number):
+    if type(layer_name_or_number) is int:
+      n = layer_name_or_number
+    elif type(layer_name_or_number) is str:
+      n = self.layer_numbers[np.array(self.layer_names) == layer_name_or_number]
+      n = int(n)
+    else:
+      sys.exit("Integer or string required.")
+    self.layer_boundaries() # refresh self.layers
+    layers_touching = []
+    # NOTE -- WILL HAVE TO UPDATE THIS TO CYCLE THROUGH ALL LAYERS IF I HAVE
+    # REALLY STRANGE GEOMETRIES -- NOT CURRENTLY EXPECTED.
+    for point in self.layers[n]:
+      x = point[0]
+      y0 = point[1]
+      for i in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[i]
+        if i != n: # not the same layer
+          y1 = self.piecewiseLinearAtX(x, layer_top)
+          if y1 == y0:
+            layers_touching.append(i)
+      layers_touching = list(set(layers_touching))
+      print point
+  
+  
+    for layer_top in self.layer_tops:
+      print layer_top
+
+
   def newAggradedTopo(self):
     topo = []
     topo.append([0, self.z_ch])
@@ -480,17 +524,23 @@ class Terrapin(object):
   
   def layerPlot(self):
     fig, ax = plt.subplots()
-    points = np.vstack(self.layers)
+    layers = self.layers.copy()
+    points = np.vstack(layers)
     minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
     infinity_to_left = minx_not_inf*2 - 1
+    miny_not_inf = np.min(points[np.isinf(points[:,1]) == False][:,1])
+    infinity_to_bottom = miny_not_inf*1.2 - 1
     i=0
-    for layer in self.layers:
+    color_cycle = ['r', 'g', 'b', 'c', 'm', 'y']
+    for layer in layers:
       layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
-      shape = plt.Polygon(layer, label=self.layer_lithologies[i])
+      layer[:,1][np.isinf(layer[:,1])] = infinity_to_bottom
+      shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_lithologies[i])
       ax.add_patch(shape)
       i+=1
     plt.axis('scaled')
-    plt.legend()
+    plt.legend(loc='bottom left')
+    plt.show()
     #labels = self.layer_lithologies
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
     #plt.setp(legend.get_texts(), fontsize='small')
@@ -506,24 +556,106 @@ class Terrapin(object):
     """
     self.layers = []
     for layer_top in self.layer_tops:
-      highest_points_below = self.highest_points_below(layer_top)
-      # Reverse order to go from right to left -- make loop
-      layer = np.vstack((layer_top, highest_points_below[::-1]))
-      self.layers.append(layer)
+      self.layers.append(self.layer_boundary(layer_top))
   
-  def highest_points_below(self, pwl):
+  def layer_boundary(self, layer_top):
+
+  #self.layers = []
+  #for layer_top in self.layer_tops:
+    # Set-up    
+    bottoms = []
+    left = layer_top[0,0]
+    right = layer_top[-1,0]
+
+    is_below = []
+    # Create a list of layers that are above (0) or below (1) layer_top
+    for i in range(len(self.layer_tops)):
+      layer = self.layer_tops[i]
+      for point in layer:
+        layer_top_at_point = self.piecewiseLinearAtX(point[0], layer_top)
+        #print layer_top_at_point
+        #print layer_top_at_point, point[1], layer_top_at_point > point[1]
+        if layer_top_at_point > point[1]:
+          is_below.append(i)
+    is_below = sorted(list(set(is_below))) # rmv sorted for speed?
+    #is_below_array = np.in1d(self.layer_numbers, is_below)
     
+    # After this, find for each point, which piecewise linear layer top
+    # of these candidates is the highest. Whichever one is will be the layer
+    # bottom of the next layer above.
+    potential_bottom_point_layers = []
+    for layer_number in is_below:
+      potential_bottom_point_layers.append(self.layer_tops[layer_number])
+    
+    # Then check for each point that lies below the layer in question, whether
+    # it is at the top.
+    # If it is, add it to a list of bottom points
+    bottom_points = []
+    for i in range(len(potential_bottom_point_layers)):
+      layer_i = potential_bottom_point_layers[i]
+      other_layers = potential_bottom_point_layers[:i] + \
+                     potential_bottom_point_layers[i+1:]
+      points = layer_i[(layer_i[:,0] >= left) * (layer_i[:,0] <= right)]
+      for point in points:
+        other_layer_tops_at_point = []
+        for other_layer in other_layers:
+          other_layer_tops_at_point.append(self.piecewiseLinearAtX(point[0], \
+                                                                   other_layer))
+        if (point[1] > np.array(other_layer_tops_at_point)).all():
+          # Although the first cut looked for layers below, not every layer is
+          # completely below.
+          # So check that all new points are below.
+          print point, self.piecewiseLinearAtX(point[0], layer_top)
+          if point[1] < self.piecewiseLinearAtX(point[0], layer_top):
+            bottom_points.append(point)
+    # For bottom layer
+    if len(bottom_points) == 0:
+      bottom_points = np.array([[0, -np.inf], [-np.inf, -np.inf]])
+    else:
+      bottom_points = np.vstack(bottom_points)
+      # Sort R to L (greatest to least)
+      bottom_points = bottom_points[ bottom_points[:,0].argsort() ][::-1]
+    
+    layer_boundary = np.vstack((layer_top, bottom_points))
+
+    self.layers.append(layer_boundary)
+
+
+    return layer_boundary
+    
+
+  def highest_points_below(self, pwl):
+    """
+    This may be leaky for finding layers directly below --
+    looks at highest points below, but does not look to
+    see whether another layer lies between.
+    WATCH OUT FOR A BUG FROM THIS ONE!
+    Also currently gives all layers' highest points -- so multiple from one
+    layer possible.
+    """
+
+    # Set-up    
     highest_points_below = []
     left = pwl[0,0]
     right = pwl[-1,0]
+    
+    # Points at tops of layers
     layer_top_points = np.vstack(self.layer_tops)
     layer_top_points = layer_top_points[(layer_top_points[:,0] >= left) *
                                         (layer_top_points[:,0] <= right)]
+
+    # Points at tops of layers
     for point in layer_top_points:
       ztop = self.piecewiseLinearAtX(point[0], pwl)
       if point[1] < ztop:
         highest_points_below.append(point)
     highest_points_below = self.unique_rows(np.vstack(highest_points_below))
+    
+    # Take highest point if multiple layers offer one
+    #x_values = list(set(highest_points_below[:,0]))
+    
+    
+    # Sort
     highest_points_below = highest_points_below[highest_points_below \
                                                 [:,0].argsort()]
     return highest_points_below
