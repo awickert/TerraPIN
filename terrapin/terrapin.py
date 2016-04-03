@@ -343,7 +343,52 @@ class Terrapin(object):
     touching_layers = self.layersTouchedByLayer(new_layer_name)
     print ""
     print touching_layers
-
+    #if touching_layers == self.layers_touching.any()
+    layers_touched_logical = np.in1d(self.layer_numbers, touching_layers)
+    layer_lithologies_touched = np.array(self.layer_lithologies) \
+                                                        [layers_touched_logical]
+    alluvial_layer_numbers_touched = np.array(touching_layers)[ \
+                                    layer_lithologies_touched == 'alluvium']
+    new_layer_number = self.layer_numbers[-1]
+    
+    touching_alluvial_layer_numbers = np.hstack((alluvial_layer_numbers_touched,\
+                                                new_layer_number))
+    # Pick all top points
+    points_combined = []
+    for i in touching_alluvial_layer_numbers:
+      points_combined.append(self.layer_tops[i])
+    points_combined = np.vstack(points_combined)
+    combined_layer_top = []
+    for point in points_combined:
+      point_geq_layer = []
+      for n in touching_alluvial_layer_numbers:
+        # Append on two conditions:
+        # 1. > all others
+        # 2. nan (i.e. no other in this place
+        gt_cond = point[1] >= self.piecewiseLinearAtX(point[0], 
+                                                      self.layer_tops[n])
+        nan_cond = np.isnan( self.piecewiseLinearAtX(point[0], 
+                                                      self.layer_tops[n]) )
+        if gt_cond or nan_cond:
+          point_geq_layer.append(True)
+        else:
+          point_geq_layer.append(False)
+      if np.array(point_geq_layer).all():
+        print point
+        combined_layer_top.append(point)
+    combined_layer_top = np.array(combined_layer_top)
+    combined_layer_top = self.rmdup(combined_layer_top)
+        
+    # Remove layers with higher layer numbers
+    for n in touching_alluvial_layer_numbers[touching_alluvial_layer_numbers!=
+                                     np.min(touching_alluvial_layer_numbers)]:
+      self.layer_numbers = np.delete(self.layer_numbers, n)
+      self.layer_names.pop(n)
+      self.layer_lithologies.pop(n)
+      self.layer_tops.pop(n)
+    self.layer_tops[np.min(touching_alluvial_layer_numbers)] = \
+                                                           combined_layer_top
+    
     """
     # Will break now that layers are updated earlier on -- will see an
     # extra layer
@@ -392,7 +437,7 @@ class Terrapin(object):
     #    Points shared -- any parts of borders touching!
     """
   
-  def layersTouchedByLayer(layer_name_or_number):
+  def layersTouchedByLayer(self, layer_name_or_number):
     if type(layer_name_or_number) is int:
       n = layer_name_or_number
     elif type(layer_name_or_number) is str:
@@ -413,13 +458,9 @@ class Terrapin(object):
           y1 = self.piecewiseLinearAtX(x, layer_top)
           if y1 == y0:
             layers_touching.append(i)
-      layers_touching = list(set(layers_touching))
-      print point
-  
-  
-    for layer_top in self.layer_tops:
-      print layer_top
-
+    layers_touching = list(set(layers_touching))
+      
+    return layers_touching
 
   def newAggradedTopo(self):
     topo = []
