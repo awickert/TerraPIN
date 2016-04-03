@@ -184,6 +184,49 @@ class Terrapin(object):
 
       self.topo = self.newIncisedTopo(topo_updates)
 
+      # Vertices from topo must be added to layer tops
+      # But ONLY those that lie above the layer bottoms.
+      # -- this was source of earlier problem --
+      # -- (channel added to upper layers) --
+      for i in range(len(self.layer_tops)):
+        layer_top = self.layer_tops[i]
+        for topo_point in self.topo:
+          x_topo = topo_point[0]
+          y_topo = topo_point[1]
+          y_layer_top = self.piecewiseLinearAtX(x_topo, layer_top)
+          # Point must be inside layer: below top
+          if (y_topo <= y_layer_top):
+            # And be above its original bottom, if applicable
+            if i < len(self.initial_layer_bottoms):
+              y_layer_bottom = self.piecewiseLinearAtX(x_topo, \
+                                             self.initial_layer_bottoms[i])
+              if y_topo >= y_layer_bottom:
+                print topo_point
+                self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
+            # Unless this was not an original layer.
+            else:
+              self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
+      
+      # Then, remove all layer top points that lie above topo
+      for i in range(len(self.layer_tops)):
+        layer_top_trimmed = []
+        for point in self.layer_tops[i]:
+          x_layer_top = point[0]
+          y_layer_top = point[1]
+          y_topo = self.piecewiseLinearAtX(x_layer_top, self.topo)
+          if y_topo >= y_layer_top:
+            #print point
+            layer_top_trimmed.append(point)
+        print np.array(layer_top_trimmed)
+        self.layer_tops[i] = np.array(layer_top_trimmed)
+
+      # Must check where channel incises through multiple layers, and ensure
+      # that no layer is incised beyond its bottom
+      # (I do this below: ensure that it is not too deep)
+      
+      """
+      # NECESSARY CRUFT IN NEXT SECTION
+
       # Find bottoms of geologic layers at x=0
       # This is to ensure we don't incise past these
       layer_tops_at_x0 = []
@@ -200,27 +243,8 @@ class Terrapin(object):
           _y_layer_bottom.append(-np.inf) # change to nan? sometimes layer just doesn't exist here anymore!
       #y_at_layers = np.array(y_at_layer)
 
-      # Vertices from topo must be added to layer tops
-      # But ONLY those that lie above the layer bottoms.
-      # -- this was source of earlier problem --
-      # -- (channel added to upper layers) --
-      for i in range(len(self.layer_tops)):
-        layer_top = self.layer_tops[i]
-        for topo_point in self.topo:
-          x_topo = topo_point[0]
-          y_topo = topo_point[1]
-          y_layer = self.piecewiseLinearAtX(x_topo, layer_top)
-          # Point must be below layer
-          if (y_topo <= y_layer):
-            # And be above its original bottom
-            if i >= len(self.initial_layer_bottoms):
-              print topo_point
-              self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
-      
-      # Must check where channel incises through multiple layers, and ensure
-      # that no layer is incised beyond its bottom
-      # (I do this below: ensure that it is not too deep)
-      
+
+
       # Layers must be at the minimum elevation at each point
       # Minimum calculated between:
       #    - Layer elevation at point
@@ -239,12 +263,17 @@ class Terrapin(object):
           final_points.append([_x,_y])
         layer_top = np.array(final_points)
         self.layer_tops[i] = layer_top
+      """
+      
+      # Remove duplicate points
+      self.layer_tops = self.rmdup(self.layer_tops)
       
       # Then sort it all
       for i in range(len(self.layer_tops)):
         layer_top = self.layer_tops[i]
         self.layer_tops[i] = layer_top[layer_top[:,0].argsort()]
 
+      # NOT SURE IF THIS IS NEEDED!
       # Then check for unnecesssary points and remove them
       for i in range(len(self.layer_tops)):
         layer_top = self.layer_tops[i]
@@ -311,8 +340,14 @@ class Terrapin(object):
     #######################################
     # Combine adjacent layers of alluvium #
     #######################################
-    #touching_layers = self.layersTouchedByLayer(new_layer_name)
+    touching_layers = self.layersTouchedByLayer(new_layer_name)
+    print ""
+    print touching_layers
 
+    """
+    # Will break now that layers are updated earlier on -- will see an
+    # extra layer
+    
     ######################################################
     # Check if we are adjacent to another alluvial layer #
     ######################################################
@@ -355,6 +390,7 @@ class Terrapin(object):
     #    use self.layers to see if any points are shared.
     #    OR even simplify this whole thing by always making that check!
     #    Points shared -- any parts of borders touching!
+    """
   
   def layersTouchedByLayer(layer_name_or_number):
     if type(layer_name_or_number) is int:
@@ -853,7 +889,7 @@ class Terrapin(object):
     
     # First check if z(x) not defined for this line.
     if x < np.min(pwl[:,0]) or x > np.max(pwl[:,0]):
-      z = np.nan
+      z = np.array([np.nan])
     else:
       # First, define line segment of interest
       xmin_pwl = np.max( pwl[:,0][pwl[:,0] <= x] )
@@ -870,16 +906,21 @@ class Terrapin(object):
           z_xmax_pwl = z_xmax_pwl[0]
         else:
           sys.exit(">1 possible point at x; not a function!")
-      if xmin_pwl == xmax_pwl:
+      if (xmin_pwl == xmax_pwl) or (z_xmin_pwl == z_xmax_pwl):
+        # The latter prevents double infinities in z from producing a nan
+        # in else
         z = z_xmin_pwl
       else:
-        # z = mx + b 
+        # z = mx + b
         m = (z_xmax_pwl - z_xmin_pwl)/(xmax_pwl - xmin_pwl)
         # using max to avoid -inf
         b = z_xmax_pwl - m*xmax_pwl
         z = m*x + b
-
-    return float(z)
+    
+    # At this point, must be just one value, but this would be the place to 
+    # add a check for it if I'm worried.
+    
+    return z[0]
     
   def piecewiseLinearAtZ(self, z, pwl):
     """
@@ -947,7 +988,6 @@ class Terrapin(object):
       layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
     
-    
     # Need to check
     # 1. is point above all layers? if so, error.
     #        --> check that this works with aggradation
@@ -961,6 +1001,9 @@ class Terrapin(object):
     with np.errstate(invalid='ignore'):
       layers_above_point = layer_elevations_at_point > point[1]
       point_above_all_layers = (layer_elevations_at_point < point[1]).all()
+    print layer_elevations_at_point
+    print point[1]
+    print (layer_elevations_at_point != point[1]).all()
     if point_above_all_layers:
       # Must be above everything, the point is in free space!
       layer_elevation_point_is_inside = None
@@ -975,9 +1018,16 @@ class Terrapin(object):
         np.min(layer_elevations_at_point[layers_above_point])
       layer_number = layer_numbers[layer_elevations_at_point \
                                    == layer_elevation_point_is_inside]
-      layer_number = int(np.mean(layer_number))
+      if len(layer_number) > 1:
+        sys.exit('entering too many layers!')
+      else:
+        layer_number = int(layer_number)
+        print "HERE HERE HERE"
+        print point,
+        print from_point
     #elif (point == from_point).all():
     else:
+      print "*****************************"
       # Otherwise the point is on a layer
       layers_at_point_elevation = (layer_elevations_at_point == point[1])
       """
