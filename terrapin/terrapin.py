@@ -32,7 +32,9 @@ class Terrapin(object):
   def initialize(self):
     self.set_input_values()
     self.topographicProfile(self.layer_tops)
-    self.original_layer_boundaries = self.layer_boundaries()
+    self.initial_layer_boundaries = self.calc_layer_boundaries()
+    self.layer_boundaries = self.initial_layer_boundaries[:]
+    self.initial_layer_bottoms = self.calc_layer_bottoms()
 
   def update(self):
     self.layer_tops_old = self.layer_tops.copy()
@@ -211,9 +213,9 @@ class Terrapin(object):
           # Point must be below layer
           if (y_topo <= y_layer):
             # And be above its original bottom
-            if i >= len(self.original_layer_boundaries):
-            print topo_point
-            self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
+            if i >= len(self.initial_layer_bottoms):
+              print topo_point
+              self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
       
       # Must check where channel incises through multiple layers, and ensure
       # that no layer is incised beyond its bottom
@@ -362,7 +364,7 @@ class Terrapin(object):
       n = int(n)
     else:
       sys.exit("Integer or string required.")
-    self.layers = self.layer_boundaries() # refresh self.layers
+    self.layers = self.calc_layer_boundaries() # refresh self.layers
     layers_touching = []
     # NOTE -- WILL HAVE TO UPDATE THIS TO CYCLE THROUGH ALL LAYERS IF I HAVE
     # REALLY STRANGE GEOMETRIES -- NOT CURRENTLY EXPECTED.
@@ -551,7 +553,7 @@ class Terrapin(object):
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
     #plt.setp(legend.get_texts(), fontsize='small')
   
-  def layer_boundaries(self):
+  def calc_layer_boundaries(self):
     """
     For each line segment:
       find all highest points that are below it.
@@ -562,11 +564,11 @@ class Terrapin(object):
     """
     layers = []
     for layer_top in self.layer_tops:
-      layers.append(self.layer_boundary(layer_top))
+      layers.append(self.calc_layer_boundary(layer_top))
 
     return layers
   
-  def layer_boundary(self, layer_top):
+  def calc_layer_boundary(self, layer_top):
 
   #self.layers = []
   #for layer_top in self.layer_tops:
@@ -627,13 +629,20 @@ class Terrapin(object):
     layer_boundary = np.vstack((layer_top, bottom_points))
     #self.layers.append(layer_boundary)
     
-    # Also get layer bottom -- nope, now just getting this at start.
-    #piecewiseLinear
-    #layer_bottom = np.vstack((bottom_points[::-1], layer_top[-1]))
-    
     return layer_boundary
-    
-  def layer_bottom(layer_boundary, layer_top)
+  
+  def calc_layer_bottoms(self):
+    """
+    A wrapper for "layer bottom" to update all layer bottoms
+    """
+    layer_bottoms = []
+    for i in range(len(self.layer_tops)):
+      layer_bottoms.append(self.calc_layer_bottom(self.layer_boundaries[i],
+                                                  self.layer_tops[i]))
+
+    return layer_bottoms
+  
+  def calc_layer_bottom(self, layer_boundary, layer_top):
     """
     Gives all the points that are needed to define a layer's bottom
     """
@@ -641,13 +650,15 @@ class Terrapin(object):
     for point in layer_boundary:
       if point[1] < self.piecewiseLinearAtX(point[0], layer_top):
         layer_bottom.append(point)
-    if (layer_top[0][0] >= layer_bottom[0][0]) == False:
+    # If left edge missing b/c it is a piece of the top, add it
+    bottom_at_top_left = self.piecewiseLinearAtX(layer_top[0][0], np.array(layer_bottom))
+    if np.isnan(bottom_at_top_left):
       layer_bottom.insert(0, layer_top[0])
     # If we're missing the last piece of the bottom because it's in the top,
     # add it.
-    bottom_at_top_end = self.piecewiseLinearAtX(layer_top[-1][0], \
+    bottom_at_top_right = self.piecewiseLinearAtX(layer_top[-1][0], \
                                                 np.array(layer_bottom))
-    if np.isnan(bottom_at_top_end):
+    if np.isnan(bottom_at_top_right):
       layer_bottom.append(layer_top[-1])
 
     layer_bottom = np.array(layer_bottom)
