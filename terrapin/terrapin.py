@@ -194,7 +194,7 @@ class Terrapin(object):
         topo_at_layer_points = np.array(topo_at_layer_points)
         if (topo_at_layer_points < layer[:,1]).all():
           print n
-          self.layer_numbers = np.arange(len(self.layer_numbers)) # renumber
+          self.layer_numbers = np.arange(len(self.layer_numbers)-1) # renumber
                                    # to keep indices and layer_numbers the same
           self.layer_names.pop(n)
           self.layer_lithologies.pop(n)
