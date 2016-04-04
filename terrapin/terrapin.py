@@ -185,9 +185,9 @@ class Terrapin(object):
       self.topo = self.newIncisedTopo(topo_updates)
       
       # Completely remove all layers that lie entirely above topography
-      self.layers = self.calc_layer_boundaries() # refresh self.layers      
-      for n in range(len(self.layers)):
-        layer = self.layers[n]
+      self.layer_boundaries = self.calc_layer_boundaries() # refresh      
+      for n in range(len(self.layer_boundaries)):
+        layer = self.layer_boundaries[n]
         topo_at_layer_points = []
         for point in layer:
           topo_at_layer_points.append(self.piecewiseLinearAtX(point[0], self.topo))
@@ -404,6 +404,9 @@ class Terrapin(object):
       self.layer_tops.pop(n)
     self.layer_tops[np.min(touching_alluvial_layer_numbers)] = \
                                                            combined_layer_top
+
+    # Update list of layer boundaries after aggradation
+    self.layer_boundaries = self.calc_layer_boundaries()
     
     """
     # Will break now that layers are updated earlier on -- will see an
@@ -461,11 +464,11 @@ class Terrapin(object):
       n = int(n)
     else:
       sys.exit("Integer or string required.")
-    self.layers = self.calc_layer_boundaries() # refresh self.layers
+    self.layer_boundaries= self.calc_layer_boundaries() # refresh
     layers_touching = []
     # NOTE -- WILL HAVE TO UPDATE THIS TO CYCLE THROUGH ALL LAYERS IF I HAVE
     # REALLY STRANGE GEOMETRIES -- NOT CURRENTLY EXPECTED.
-    for point in self.layers[n]:
+    for point in self.layer_boundaries[n]:
       x = point[0]
       y0 = point[1]
       for i in range(len(self.layer_tops)):
@@ -670,15 +673,14 @@ class Terrapin(object):
   #self.layers = []
   #for layer_top in self.layer_tops:
     # Set-up    
-    bottoms = []
     left = layer_top[0,0]
     right = layer_top[-1,0]
 
     is_below = []
     # Create a list of layers that are above (0) or below (1) layer_top
     for i in range(len(self.layer_tops)):
-      layer = self.layer_tops[i]
-      for point in layer:
+      other_layer_top = self.layer_tops[i]
+      for point in other_layer_top:
         layer_top_at_point = self.piecewiseLinearAtX(point[0], layer_top)
         #print layer_top_at_point
         #print layer_top_at_point, point[1], layer_top_at_point > point[1]
@@ -706,14 +708,16 @@ class Terrapin(object):
       for point in points:
         other_layer_tops_at_point = []
         for other_layer in other_layers:
-          other_layer_tops_at_point.append(self.piecewiseLinearAtX(point[0], \
-                                                                   other_layer))
-        if (point[1] > np.array(other_layer_tops_at_point)).all():
+          other_layer_tops_at_point.append(np.round(
+                           self.piecewiseLinearAtX(point[0], other_layer), 10))
+        if (np.round(point[1], 10) > \
+                   np.array(other_layer_tops_at_point)).all():
           # Although the first cut looked for layers below, not every layer is
           # completely below.
           # So check that all new points are below.
           print point, self.piecewiseLinearAtX(point[0], layer_top)
-          if point[1] < self.piecewiseLinearAtX(point[0], layer_top):
+          if np.round(point[1], 10) < \
+                   np.round(self.piecewiseLinearAtX(point[0], layer_top), 10):
             bottom_points.append(point)
     # For bottom layer
     if len(bottom_points) == 0:
