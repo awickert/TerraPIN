@@ -609,7 +609,7 @@ class Terrapin(object):
   
   def layerPlot(self):
     fig, ax = plt.subplots()
-    layers = self.layers.copy()
+    layers = self.calc_layer_boundaries()
     points = np.vstack(layers)
     minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
     infinity_to_left = minx_not_inf*2 - 1
@@ -623,9 +623,13 @@ class Terrapin(object):
       shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_lithologies[i])
       ax.add_patch(shape)
       i+=1
-    plt.axis('scaled')
+    # plotting limits
+    all_points = np.vstack(layers)
+    plt.xlim(( np.min(all_points[:,0]), np.max(all_points[:,0]) ))
+    plt.ylim(( np.min(all_points[:,1]), np.max(all_points[:,1]) ))
+    #plt.axis('scaled')
     plt.legend(loc='bottom left')
-    plt.show()
+    #plt.show()
     #labels = self.layer_lithologies
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
     #plt.setp(legend.get_texts(), fontsize='small')
