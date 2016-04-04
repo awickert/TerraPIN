@@ -192,7 +192,8 @@ class Terrapin(object):
         for point in layer:
           topo_at_layer_points.append(self.piecewiseLinearAtX(point[0], self.topo))
         topo_at_layer_points = np.array(topo_at_layer_points)
-        if (topo_at_layer_points > layer[:,0]).all():
+        if (topo_at_layer_points < layer[:,1]).all():
+          print n
           self.layer_numbers = np.arange(len(self.layer_numbers)) # renumber
                                    # to keep indices and layer_numbers the same
           self.layer_names.pop(n)
