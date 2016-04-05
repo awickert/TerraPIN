@@ -513,7 +513,7 @@ class Terrapin(object):
         layer_elevations_at_x = np.array(layer_elevations_at_x)
         layer_elevations_at_x = \
               layer_elevations_at_x[np.isnan(layer_elevations_at_x) == False]
-        if (np.round(point[1], 10) >= np.round(np.array(layer_elevations_at_x), 10)).all():
+        if (np.round(point[1], 6) >= np.round(np.array(layer_elevations_at_x), 6)).all():
           if (point[0] == 0) and (point[1] >= self.z_ch):
             pass
           else:
@@ -709,15 +709,15 @@ class Terrapin(object):
         other_layer_tops_at_point = []
         for other_layer in other_layers:
           other_layer_tops_at_point.append(np.round(
-                           self.piecewiseLinearAtX(point[0], other_layer), 10))
-        if (np.round(point[1], 10) > \
+                           self.piecewiseLinearAtX(point[0], other_layer), 6))
+        if (np.round(point[1], 6) > \
                    np.array(other_layer_tops_at_point)).all():
           # Although the first cut looked for layers below, not every layer is
           # completely below.
           # So check that all new points are below.
           print point, self.piecewiseLinearAtX(point[0], layer_top)
-          if np.round(point[1], 10) < \
-                   np.round(self.piecewiseLinearAtX(point[0], layer_top), 10):
+          if np.round(point[1], 6) < \
+                   np.round(self.piecewiseLinearAtX(point[0], layer_top), 6):
             bottom_points.append(point)
     # For bottom layer
     if len(bottom_points) == 0:
@@ -912,8 +912,12 @@ class Terrapin(object):
         yint = m*xint + b
         # Because there is some numerical error created by defining yint
         # with such an equation let's add a rounding term: round to nearest
-        # 1E-9 m (nanometer) -- because totally insignificant in these systems
-        intersections.append(np.round(np.array([xint, yint]), 9))
+        # 1E-9 m (micrometer) -- because totally insignificant in these systems
+        # --> Removing this rounding because it is causing errors when compared
+        # with un-rounded values.
+        # Apply rounding later!
+        #intersections.append(np.round(np.array([xint, yint]), 6))
+        intersections.append(np.array([xint, yint]))
     # Always return 2D array
     intersections = np.array(intersections, ndmin=2)
     return intersections
@@ -1076,7 +1080,7 @@ class Terrapin(object):
       print "Warning: POINT ABOVE ALL LAYERS!"
     # 2. This should also work if it is the first point.
     #    Check if this is the first point in the series
-    elif (layer_elevations_at_point != point[1]).all():
+    elif (np.round(layer_elevations_at_point, 6) != np.round(point[1], 6)).all():
       # Point does not lie on a layer top, but there should be at least
       # one layer above it.
       layer_elevation_point_is_inside = \
