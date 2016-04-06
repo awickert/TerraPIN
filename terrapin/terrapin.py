@@ -1098,7 +1098,8 @@ class Terrapin(object):
     else:
       print "*****************************"
       # Otherwise the point is on a layer
-      layers_at_point_elevation = (layer_elevations_at_point == point[1])
+      layers_at_point_elevation = (np.round(layer_elevations_at_point, 6)
+                                            == np.round(point[1], 6))
       """
       if (point == from_point).all():
         # If this is the case, then we are at the first point in the layer.
@@ -1126,9 +1127,18 @@ class Terrapin(object):
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
       if len(layer_top_number_at_point_elevation) > 1:
-        sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
-                 "did not yet prepare for it in the code.\n"+ \
-                 "Better do that now! [mid-layer]")
+        # band-aid
+        print 'FROM', from_point
+        if (from_point == np.array([0, self.z_ch])).all() and \
+           (layer_top_number_at_point_elevation == \
+           (len(self.layer_numbers)-1)).any():
+          layer_top_number_at_point_elevation = \
+                      np.min(layer_top_number_at_point_elevation)
+          layers_at_point_elevation[-1] = False
+        else:
+          sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+                   "did not yet prepare for it in the code.\n"+ \
+                   "Better do that now! [mid-layer]")
       lt = self.layer_tops[layer_top_number_at_point_elevation]
       ltx = lt[:,0]
       lty = lt[:,1]
