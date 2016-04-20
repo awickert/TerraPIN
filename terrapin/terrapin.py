@@ -1127,7 +1127,8 @@ class Terrapin(object):
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
       if len(layer_top_number_at_point_elevation) > 1:
-        # band-aid
+        # band-aid: just using slope.
+        # "else" version should be more generalized.
         print 'FROM', from_point
         if (from_point == np.array([0, self.z_ch])).all() and \
            (layer_top_number_at_point_elevation == \
@@ -1136,9 +1137,59 @@ class Terrapin(object):
                       np.min(layer_top_number_at_point_elevation)
           layers_at_point_elevation[-1] = False
         else:
-          sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
-                   "did not yet prepare for it in the code.\n"+ \
-                   "Better do that now! [mid-layer]")
+          # Use angles
+          # Line segment geometry
+          C = point # center point
+          # points around center
+          L = [] # left sides of lines
+          R = [] # right sides of lines
+          for ltnum in layer_top_number_at_point_elevation:
+            lt = self.layer_tops[ltnum]
+            vect = lt - C
+            vect_sign = np.sign(vect)
+            # Is left (or on same point) if point is left or above (or equal
+            # in each of these)
+            isleft = (vect_sign[:,0] <= 0) * (vect_sign[:,1] >= 0)
+            # otherwise is right
+            isright = np.invert(isleft)
+            #dist = self.layer_tops[ltnum]
+            L.append(lt[isleft][-1,:]) # rightmost left point
+            R.append(lt[isright][0,:]) # leftmost right point
+          L = np.array(L)
+          R = np.array(R)
+          # Check if any of these points is the center
+          iscenter = np.prod(np.round(L, 6) == np.round(C, 6), axis=1, \
+                                                               dtype=bool)
+          # Convert to radial coordinates: arctan(y/x)
+          #Lvect = (L[:,1] - C[1]) / (L[:,0] - C[0])
+          #Rvect = (R[:,1] - C[1]) / (R[:,0] - C[0])
+          Lrad = np.arctan2( L[:,1] - C, L[:,0] - C )
+          Lrad[Lrad<0] += 2*np.pi
+          Lrad[iscenter] = np.nan # Remove from analysis
+          Rrad = np.arctan2( R[:,1] - C, R[:,0] - C )
+          Rrad[Rrad<0] += 2*np.pi
+          # Where does the line of erosion point
+          #Evect = point - from_point
+          Erad = np.arctan2( point[1] - from_point[1], point[0] - from_point[0])
+          if Erad<0:
+            Erad += 2*np.pi
+          # Zones within units: CCW of L, CW of R
+          # Inside the layer even if you're at its top
+          # Not sure why -- sort of arbitrary
+          unit_number_inside = \
+             layer_top_number_at_point_elevation[(Erad >= Lrad) * (Erad > Rrad)]
+          if len(unit_number_inside) > 1:
+            sys.exit("How are we inside multiple layers?")
+          elif len(unit_number_inside) == 0:
+            # In free space
+            # Follow the surface
+            layer_top_number_at_point_elevation = \
+                layer_top_number_at_point_elevation[Lrad == np.nanmin(Lrad)]
+          else:
+            layer_top_number_at_point_elevation = unit_number_inside
+          #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+          #         "did not yet prepare for it in the code.\n"+ \
+          #         "Better do that now! [mid-layer]")
       lt = self.layer_tops[layer_top_number_at_point_elevation]
       ltx = lt[:,0]
       lty = lt[:,1]
