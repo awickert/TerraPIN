@@ -90,6 +90,23 @@ class Terrapin(object):
     self.layer_numbers = np.array([0, 1])
     self.layer_lithologies = ['bedrock', 'alluvium']
 
+    """
+    z_br_1 = np.array([[-np.inf, -40], [0, -40]])
+    self.alpha = {'bedrock_0': alpha_r, 'bedrock_1': 45, 'alluvium': alpha_a}
+    self.k = {'bedrock_0': k_r, 'bedrock_1': k_r, 'alluvium': k_a}
+    self.layer_tops = [z_br, z_br_1, z_sed]
+    self.layer_names = ['bedrock_0', 'bedrock_1', 'alluvium_0']
+    self.layer_lithologies = ['bedrock_0', 'bedrock_1', 'alluvium']
+    self.layer_numbers = np.arange(len(self.layer_names))
+
+    self.alpha = {'alluvium': alpha_a}
+    self.k = {'alluvium': k_a}
+    self.layer_tops = [z_sed]
+    self.layer_names = ['alluvium_0']
+    self.layer_lithologies = ['alluvium']
+    self.layer_numbers = np.arange(len(self.layer_names))
+    """
+
   def updateFluvialTopo_z(self):
     """
     Vertical incision or aggradation
@@ -140,11 +157,25 @@ class Terrapin(object):
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
-        # Above all? Then should be at the top.
-        # After going above topographic surface, nothing to do.
-        point = None # break out of loop.
-      else:
-        # All is normal -- carry on, cowboy/girl!
+        # First option: is above everything
+        z_topo = self.piecewiseLinearAtX(point[0], self.topo)
+        if point[1] > z_topo:
+          print "OUT!!!"
+          # Above all? Then should be at the top.
+          # After going above topographic surface, nothing to do.
+          point = None # break out of loop.
+        else:
+          # Otherwise, just eroded exactly through a layer.
+          # Look at next layer below
+          z_topo = []
+          for layer_top in self.layer_tops:
+            z_topo.append(self.piecewiseLinearAtX(point[0], layer_top))
+          z_topo = np.array(z_topo)
+          # And pick upslope layer, if in doubt.
+          inLayer = self.layer_numbers[ \
+                         np.round(z_topo, 6) == np.round(point[1], 6)][0]
+      if point is not None:
+        # Carry on, cowboy/girl!
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
@@ -178,7 +209,7 @@ class Terrapin(object):
           topo_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
           point = chosenIntersection.copy()
-    
+      
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
 
@@ -549,7 +580,7 @@ class Terrapin(object):
     """
 
     #self.topo[:-1][self.topo[:-1,0] > np.max(layers[:,0])], \
-                           
+                                              
     # 1. Add new channel
     layers = np.array(layers)
     print 'layers\n',layers
@@ -1157,8 +1188,10 @@ class Terrapin(object):
             # otherwise is right
             isright = np.invert(isleft)
             #dist = self.layer_tops[ltnum]
-            L.append(lt[isleft][-1,:]) # rightmost left point
-            R.append(lt[isright][0,:]) # leftmost right point
+            if isleft.any():
+              L.append(lt[isleft][-1,:]) # rightmost left point
+            if isright.any():
+              R.append(lt[isright][0,:]) # leftmost right point
           L = np.array(L)
           R = np.array(R)
           # Check if any of these points is the center
