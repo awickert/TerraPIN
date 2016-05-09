@@ -679,7 +679,7 @@ class Terrapin(object):
     plt.xlim(( np.min(all_points[:,0]), np.max(all_points[:,0]) ))
     plt.ylim(( np.min(all_points[:,1]), np.max(all_points[:,1]) ))
     #plt.axis('scaled')
-    plt.legend(loc='bottom left')
+    plt.legend(loc='lower left')
     #plt.show()
     #labels = self.layer_lithologies
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
