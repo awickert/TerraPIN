@@ -154,6 +154,10 @@ class Terrapin(object):
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
     while point is not None:
+      #if (point == -np.inf).any():
+      #  break
+      print "&&&&", point, from_point
+      point = np.squeeze(point)
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
@@ -229,6 +233,8 @@ class Terrapin(object):
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
 
+      print "TOPO UPDATES"
+      print topo_updates
       self.topo = self.newIncisedTopo(topo_updates)
       
       # Completely remove all layers that lie entirely above topography
@@ -282,6 +288,10 @@ class Terrapin(object):
             layer_top_trimmed.append(point)
         print np.array(layer_top_trimmed)
         self.layer_tops[i] = np.array(layer_top_trimmed)
+
+      # Then update topo to agree with layer tops;
+      # Should really do this in newIncisedTopo or somewhere.
+      
 
       # Must check where channel incises through multiple layers, and ensure
       # that no layer is incised beyond its bottom
@@ -1003,7 +1013,6 @@ class Terrapin(object):
     pwl: a 2-column numpy array, ([x, z]), that must contain at least
          four entries (two points define a line)
     """
-    
     # First check if z(x) not defined for this line.
     if x < np.min(pwl[:,0]) or x > np.max(pwl[:,0]):
       z = np.array([np.nan])
@@ -1104,6 +1113,7 @@ class Terrapin(object):
     
     layer_elevations_at_point = []
     for i in range(len(layers)):
+      print '***', point
       layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
     layer_elevations_at_point = np.array(layer_elevations_at_point)
     
@@ -1132,7 +1142,8 @@ class Terrapin(object):
       print "Warning: POINT ABOVE ALL LAYERS!"
     # 2. This should also work if it is the first point.
     #    Check if this is the first point in the series
-    elif (layers_at_point_elevation).all():
+    elif (layers_at_point_elevation).any() == False:
+      # Point inside a layer
       # Point does not lie on a layer top, but there should be at least
       # one layer above it.
       layer_elevation_point_is_inside = \
@@ -1257,89 +1268,14 @@ class Terrapin(object):
         except:
           layer_top_number_at_point_elevation = \
               layer_top_number_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
-        layer_number = [layer_top_number_at_point_elevation, 'entering free space']
+        #layer_number = [layer_top_number_at_point_elevation, 'entering free space']
       else:
         layer_top_number_at_point_elevation = unit_number_inside
         # Define layer_number
-        layer_number = layer_top_number_at_point_elevation
+      layer_number = layer_top_number_at_point_elevation
         #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
         #         "did not yet prepare for it in the code.\n"+ \
         #         "Better do that now! [mid-layer]")
-
-    """
-    # Band-aid, only use this if we don't use the above angle method
-    # Eventually, will have to unify the algorithms.
-    if layer_number is not None:
-      lt = self.layer_tops[layer_top_number_at_point_elevation]
-      ltx = lt[:,0]
-      lty = lt[:,1]
-      qualified_vertices = (ltx < point[0])
-      self.ltx = ltx
-      self.lty = lty
-      self.qualified_vertices = qualified_vertices
-      self.point = point
-      if qualified_vertices.any():
-        left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
-      else:
-        # If this fails, means there is no point <, so try points =
-        (ltx == point[0]) * (lty > point[1])
-        if qualified_vertices.any():
-          left = np.squeeze(lt[lty == np.min(lty[qualified_vertices])])
-        else:
-          sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
-                   "This has not been tested yet, so test and then remove\n"+
-                   "this line when you know that all is working.")
-      # Find the "right" as the vertex that is just next after "left"
-      # If this doesn't work, whole sorting system has gone down!
-      left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
-      right_i = left_i + 1
-      right = lt[right_i]
-    """
-      
-    # Commenting out the old method for doing this -- somewhat more
-    # simplified, though effective for incision-only cases
-    """
-    # Step 2: Find slopes.
-    print 'from_point', from_point
-    if from_point is not None:
-      slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
-      if (point[0] - from_point[0]) == 0:
-        slope_line_to_point = -np.inf
-      else:
-        slope_line_to_point = (point[1] - from_point[1]) / \
-                              (point[0] - from_point[0])
-    else:
-      sys.exit("A from_point is needed here")
-    # Step 3: Use slope comparison to decide which layer to choose
-    # (Note: If only 2 layers always meet, I could have circumvented this
-    #  by simply looking at the layer in which the origin lay, and choosing
-    #  the other layer)
-    print 'slopes',
-    print slope_layer_top,
-    print slope_line_to_point
-    if slope_layer_top < slope_line_to_point:
-      # Look below line: pick layer top
-      #print layers_at_point_elevation
-      layer_number = int(self.layer_numbers[layers_at_point_elevation])
-    else:
-      # If layer top decreases more steeply than line intersecting it, look
-      # below the line.
-      layers_above = layer_elevations_at_point[
-                     layer_elevations_at_point > point[1] ]
-      if len(layers_above) == 0:
-        layer_number = None # entering free space -- other code should
-                            # take this along the top of the domain
-      else:
-        lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
-        layer_number = int(self.layer_numbers[lowest_layer_above])
-        # (even if slope_layer_top == slope_line_to_point)
-    # Step 2: find which layers meet here
-    #self.layers == points.left.any()
-    """
-
-    print "~~~~~~"
-    print layer_number
-    print "~~~~~~"
     return layer_number
     
   def unique_rows(self, array):
