@@ -157,7 +157,7 @@ class Terrapin(object):
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
-        # First option: is above everything
+        # An option: is above everything
         z_topo = self.piecewiseLinearAtX(point[0], self.topo)
         if point[1] > z_topo:
           print "OUT!!!"
@@ -174,7 +174,23 @@ class Terrapin(object):
           # And pick upslope layer, if in doubt.
           inLayer = self.layer_numbers[ \
                          np.round(z_topo, 6) == np.round(point[1], 6)][0]
-      if point is not None:
+        
+      if type(inLayer) is list:
+        # Then, it is entering the outside world; use topography to find a
+        # temporary "angle of repose".
+        x_left = self.topo[:,0][self.topo[:,0] < point[0]]
+        # geq for right b/c leftmost point must be away from channel.
+        # Was going to calculate angle, but really no need. Just find next
+        # point to the right that is on topo
+        #x_right = self.topo[:,0][self.topo[:,0] >= point[0]]
+        #topo_left = self.topo[ np.round(self.topo[:,0], 6) == \
+        #                       np.round(np.max(x_left), 6) ]
+        #topo_right = self.topo[ np.round(self.topo[:,0], 6) == \
+        #                        np.round(np.min(x_right), 6) ]
+        point = self.topo[ np.round(self.topo[:,0], 6) == \
+                               np.round(np.max(x_left), 6) ]
+        
+      elif point is not None:
         # Carry on, cowboy/girl!
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
@@ -1107,6 +1123,8 @@ class Terrapin(object):
     print layer_elevations_at_point
     print point[1]
     print (layer_elevations_at_point != point[1]).all()
+    layers_at_point_elevation = (np.round(layer_elevations_at_point, 6)
+                                          == np.round(point[1], 6))
     if point_above_all_layers:
       # Must be above everything, the point is in free space!
       layer_elevation_point_is_inside = None
@@ -1114,7 +1132,7 @@ class Terrapin(object):
       print "Warning: POINT ABOVE ALL LAYERS!"
     # 2. This should also work if it is the first point.
     #    Check if this is the first point in the series
-    elif (np.round(layer_elevations_at_point, 6) != np.round(point[1], 6)).all():
+    elif (layers_at_point_elevation).all():
       # Point does not lie on a layer top, but there should be at least
       # one layer above it.
       layer_elevation_point_is_inside = \
@@ -1131,9 +1149,9 @@ class Terrapin(object):
     #elif (point == from_point).all():
     else:
       print "*****************************"
-      # Otherwise the point is on a layer
-      layers_at_point_elevation = (np.round(layer_elevations_at_point, 6)
-                                            == np.round(point[1], 6))
+      # Otherwise the point is on a layer top
+      
+      # Delete the below soon? Or how to tell if point == from_point? ?????????????????
       """
       if (point == from_point).all():
         # If this is the case, then we are at the first point in the layer.
@@ -1160,146 +1178,168 @@ class Terrapin(object):
       # and then find layer that is entered
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
-      if len(layer_top_number_at_point_elevation) > 1:
-        # band-aid: just using slope.
-        # "else" version should be more generalized.
-        print 'TO', point
-        print 'FROM', from_point
-        if (from_point == np.array([0, self.z_ch])).all() and \
-           (layer_top_number_at_point_elevation == \
-           (len(self.layer_numbers)-1)).any():
+      # This helps if there are multiple layer tops at the layer elevation
+
+      # band-aid: just using slope.
+      # "else" version should be more generalized.
+      print 'TO', point
+      print 'FROM', from_point
+      """
+      # Are we at the river channel centerline? but why from_point?
+      if (from_point == np.array([0, self.z_ch])).all() and \
+         (layer_top_number_at_point_elevation == \
+         (len(self.layer_numbers)-1)).any():
+        layer_top_number_at_point_elevation = \
+                    np.min(layer_top_number_at_point_elevation)
+        layers_at_point_elevation[-1] = False
+        layer_number = 
+      # If not....
+      else:
+      """
+      # Use angles
+      # Line segment geometry
+      C = point # center point
+      # points around center
+      L = [] # left sides of lines
+      R = [] # right sides of lines
+      for ltnum in list(layer_top_number_at_point_elevation):
+        lt = self.layer_tops[ltnum]
+        vect = lt - C
+        vect_sign = np.sign(vect)
+        # Is left (or on same point) if point is left or above (or equal
+        # in each of these)
+        isleft = (vect_sign[:,0] <= 0) * (vect_sign[:,1] >= 0)
+        # otherwise is right
+        isright = np.invert(isleft)
+        #dist = self.layer_tops[ltnum]
+        if isleft.any():
+          L.append(lt[isleft][-1,:]) # rightmost left point
+        if isright.any():
+          R.append(lt[isright][0,:]) # leftmost right point
+      L = np.array(L)
+      R = np.array(R)
+      # Check if any of these points is the center
+      iscenter = np.prod(np.round(L, 6) == np.round(C, 6), axis=1, \
+                                                           dtype=bool)
+      # Convert to radial coordinates: arctan(y/x)
+      #Lvect = (L[:,1] - C[1]) / (L[:,0] - C[0])
+      #Rvect = (R[:,1] - C[1]) / (R[:,0] - C[0])
+      Lrad = np.arctan2( L[:,1] - C[1], L[:,0] - C[0] )
+      Lrad = np.array(Lrad)
+      Lrad[Lrad<0] += 2*np.pi
+      Lrad[iscenter] = np.nan # Remove from analysis
+      Rrad = np.arctan2( R[:,1] - C[1], R[:,0] - C[0] )
+      Rrad = np.array(Rrad)
+      Rrad[Rrad<0] += 2*np.pi
+      # Where does the line of erosion point
+      #Evect = point - from_point
+      Erad = np.arctan2( point[1] - from_point[1], point[0] - from_point[0])
+      Erad = np.array(Erad)
+      if Erad<0:
+        Erad += 2*np.pi
+      # Zones within units: CCW of L, CW of R
+      # Inside the layer even if you're at its top
+      # Not sure why -- sort of arbitrary
+      # (and just changed it.)
+      unit_number_inside = \
+         layer_top_number_at_point_elevation[(Erad > Lrad) * (Erad <= Rrad)]
+      if len(unit_number_inside) > 1:
+        # pass and sort out later on?
+        sys.exit("How are we inside multiple layers?")
+      elif len(unit_number_inside) == 0:
+        # About to enter free space
+        # Follow the surface
+        # And choose the leftmost if two come together
+        layer_number = -1
+        try:
           layer_top_number_at_point_elevation = \
-                      np.min(layer_top_number_at_point_elevation)
-          layers_at_point_elevation[-1] = False
-        else:
-          # Use angles
-          # Line segment geometry
-          C = point # center point
-          # points around center
-          L = [] # left sides of lines
-          R = [] # right sides of lines
-          for ltnum in layer_top_number_at_point_elevation:
-            lt = self.layer_tops[ltnum]
-            vect = lt - C
-            vect_sign = np.sign(vect)
-            # Is left (or on same point) if point is left or above (or equal
-            # in each of these)
-            isleft = (vect_sign[:,0] <= 0) * (vect_sign[:,1] >= 0)
-            # otherwise is right
-            isright = np.invert(isleft)
-            #dist = self.layer_tops[ltnum]
-            if isleft.any():
-              L.append(lt[isleft][-1,:]) # rightmost left point
-            if isright.any():
-              R.append(lt[isright][0,:]) # leftmost right point
-          L = np.array(L)
-          R = np.array(R)
-          # Check if any of these points is the center
-          iscenter = np.prod(np.round(L, 6) == np.round(C, 6), axis=1, \
-                                                               dtype=bool)
-          # Convert to radial coordinates: arctan(y/x)
-          #Lvect = (L[:,1] - C[1]) / (L[:,0] - C[0])
-          #Rvect = (R[:,1] - C[1]) / (R[:,0] - C[0])
-          Lrad = np.arctan2( L[:,1] - C, L[:,0] - C )
-          Lrad[Lrad<0] += 2*np.pi
-          Lrad[iscenter] = np.nan # Remove from analysis
-          Rrad = np.arctan2( R[:,1] - C, R[:,0] - C )
-          Rrad[Rrad<0] += 2*np.pi
-          # Where does the line of erosion point
-          #Evect = point - from_point
-          Erad = np.arctan2( point[1] - from_point[1], point[0] - from_point[0])
-          if Erad<0:
-            Erad += 2*np.pi
-          # Zones within units: CCW of L, CW of R
-          # Inside the layer even if you're at its top
-          # Not sure why -- sort of arbitrary
-          # (and just changed it.)
-          unit_number_inside = \
-             layer_top_number_at_point_elevation[(Erad > Lrad) * (Erad <= Rrad)]
-          if len(unit_number_inside) > 1:
-            # pass and sort out later on?
-            sys.exit("How are we inside multiple layers?")
-          elif len(unit_number_inside) == 0:
-            # In free space
-            # Follow the surface
-            # And choose the leftmost if two come together
-            try:
-              layer_top_number_at_point_elevation = \
-                  layer_top_number_at_point_elevation[Lrad == np.nanmin(Lrad)][0]
-            except:
-              layer_top_number_at_point_elevation = \
-                  layer_top_number_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
-          else:
-            layer_top_number_at_point_elevation = unit_number_inside
-          # Define layer_number
-          layer_number = layer_top_number_at_point_elevation
-          #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
-          #         "did not yet prepare for it in the code.\n"+ \
-          #         "Better do that now! [mid-layer]")
-      # Band-aid, only use this if we don't use the above angle method
-      # Eventually, will have to unify the algorithms.
-      if layer_number is not None:
-        lt = self.layer_tops[layer_top_number_at_point_elevation]
-        ltx = lt[:,0]
-        lty = lt[:,1]
-        qualified_vertices = (ltx < point[0])
-        self.ltx = ltx
-        self.lty = lty
-        self.qualified_vertices = qualified_vertices
-        self.point = point
+              layer_top_number_at_point_elevation[Lrad == np.nanmin(Lrad)][0]
+        except:
+          layer_top_number_at_point_elevation = \
+              layer_top_number_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
+        layer_number = [layer_top_number_at_point_elevation, 'entering free space']
+      else:
+        layer_top_number_at_point_elevation = unit_number_inside
+        # Define layer_number
+        layer_number = layer_top_number_at_point_elevation
+        #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
+        #         "did not yet prepare for it in the code.\n"+ \
+        #         "Better do that now! [mid-layer]")
+
+    """
+    # Band-aid, only use this if we don't use the above angle method
+    # Eventually, will have to unify the algorithms.
+    if layer_number is not None:
+      lt = self.layer_tops[layer_top_number_at_point_elevation]
+      ltx = lt[:,0]
+      lty = lt[:,1]
+      qualified_vertices = (ltx < point[0])
+      self.ltx = ltx
+      self.lty = lty
+      self.qualified_vertices = qualified_vertices
+      self.point = point
+      if qualified_vertices.any():
+        left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
+      else:
+        # If this fails, means there is no point <, so try points =
+        (ltx == point[0]) * (lty > point[1])
         if qualified_vertices.any():
-          left = np.squeeze(lt[ltx == np.max(ltx[qualified_vertices]),:])
+          left = np.squeeze(lt[lty == np.min(lty[qualified_vertices])])
         else:
-          # If this fails, means there is no point <, so try points =
-          (ltx == point[0]) * (lty > point[1])
-          if qualified_vertices.any():
-            left = np.squeeze(lt[lty == np.min(lty[qualified_vertices])])
-          else:
-            sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
-                     "This has not been tested yet, so test and then remove\n"+
-                     "this line when you know that all is working.")
-        # Find the "right" as the vertex that is just next after "left"
-        # If this doesn't work, whole sorting system has gone down!
-        left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
-        right_i = left_i + 1
-        right = lt[right_i]
-        # Step 2: Find slopes.
-        print 'from_point', from_point
-        if from_point is not None:
-          slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
-          if (point[0] - from_point[0]) == 0:
-            slope_line_to_point = -np.inf
-          else:
-            slope_line_to_point = (point[1] - from_point[1]) / \
-                                  (point[0] - from_point[0])
-        else:
-          sys.exit("A from_point is needed here")
-        # Step 3: Use slope comparison to decide which layer to choose
-        # (Note: If only 2 layers always meet, I could have circumvented this
-        #  by simply looking at the layer in which the origin lay, and choosing
-        #  the other layer)
-        print 'slopes',
-        print slope_layer_top,
-        print slope_line_to_point
-        if slope_layer_top < slope_line_to_point:
-          # Look below line: pick layer top
-          #print layers_at_point_elevation
-          layer_number = int(self.layer_numbers[layers_at_point_elevation])
-        else:
-          # If layer top decreases more steeply than line intersecting it, look
-          # below the line.
-          layers_above = layer_elevations_at_point[
-                         layer_elevations_at_point > point[1] ]
-          if len(layers_above) == 0:
-            layer_number = None # entering free space -- other code should
-                                # take this along the top of the domain
-          else:
-            lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
-            layer_number = int(self.layer_numbers[lowest_layer_above])
-            # (even if slope_layer_top == slope_line_to_point)
-        # Step 2: find which layers meet here
-        #self.layers == points.left.any()
-        
+          sys.exit("Is this layer a lens that doesn't go to -inf in x?\n"+
+                   "This has not been tested yet, so test and then remove\n"+
+                   "this line when you know that all is working.")
+      # Find the "right" as the vertex that is just next after "left"
+      # If this doesn't work, whole sorting system has gone down!
+      left_i = np.prod(lt == left, axis=1).nonzero()[0][0]
+      right_i = left_i + 1
+      right = lt[right_i]
+    """
+      
+    # Commenting out the old method for doing this -- somewhat more
+    # simplified, though effective for incision-only cases
+    """
+    # Step 2: Find slopes.
+    print 'from_point', from_point
+    if from_point is not None:
+      slope_layer_top = (right[1] - left[1]) / (right[0] - left[0])
+      if (point[0] - from_point[0]) == 0:
+        slope_line_to_point = -np.inf
+      else:
+        slope_line_to_point = (point[1] - from_point[1]) / \
+                              (point[0] - from_point[0])
+    else:
+      sys.exit("A from_point is needed here")
+    # Step 3: Use slope comparison to decide which layer to choose
+    # (Note: If only 2 layers always meet, I could have circumvented this
+    #  by simply looking at the layer in which the origin lay, and choosing
+    #  the other layer)
+    print 'slopes',
+    print slope_layer_top,
+    print slope_line_to_point
+    if slope_layer_top < slope_line_to_point:
+      # Look below line: pick layer top
+      #print layers_at_point_elevation
+      layer_number = int(self.layer_numbers[layers_at_point_elevation])
+    else:
+      # If layer top decreases more steeply than line intersecting it, look
+      # below the line.
+      layers_above = layer_elevations_at_point[
+                     layer_elevations_at_point > point[1] ]
+      if len(layers_above) == 0:
+        layer_number = None # entering free space -- other code should
+                            # take this along the top of the domain
+      else:
+        lowest_layer_above = layer_elevations_at_point == np.min(layers_above)
+        layer_number = int(self.layer_numbers[lowest_layer_above])
+        # (even if slope_layer_top == slope_line_to_point)
+    # Step 2: find which layers meet here
+    #self.layers == points.left.any()
+    """
+
+    print "~~~~~~"
+    print layer_number
+    print "~~~~~~"
     return layer_number
     
   def unique_rows(self, array):
