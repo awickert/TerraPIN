@@ -68,10 +68,22 @@ class Terrapin(object):
     z_br = np.array([[-np.inf, -10], [0, -10]])
     # sediment (x,z)
     z_sed = np.array([[-np.inf, 0], [0, 0]])
+    # z_sky: try including a free space layer to make it easier
     # Define channel width at this point
     self.b = 50 # [m]
     # And the channel will start out the same width as its bedrock-valley
     self.B = 50 # [m]
+    
+    """
+    # when erosion intersects the free air
+    z_sky = np.array([[-np.inf, np.inf], [0, np.inf]])
+    self.alpha = {'free_space': 0., 'bedrock': alpha_r, 'alluvium': alpha_a}
+    self.k = {'free_space': np.inf, 'bedrock': k_r, 'alluvium': k_a}
+    self.layer_tops = [z_sky, z_br, z_sed]
+    self.layer_names = ['sky', 'bedrock_0', 'alluvium_0']
+    self.layer_numbers = np.array([0, 1, 2])
+    self.layer_lithologies = ['air', 'bedrock', 'alluvium']
+    """
     
     # Create arrays of values of angles and resistance to erosion
     # Alluvium is always the last one
@@ -179,6 +191,27 @@ class Terrapin(object):
           inLayer = self.layer_numbers[ \
                          np.round(z_topo, 6) == np.round(point[1], 6)][0]
       
+      elif inLayer == -1:
+        # Then, it is entering the outside world; use topography to find a
+        # temporary "angle of repose".
+        x_left = self.topo[:,0][self.topo[:,0] < point[0]]
+        # geq for right b/c leftmost point must be away from channel.
+        # Was going to calculate angle, but really no need. Just find next
+        # point to the right that is on topo
+        #x_right = self.topo[:,0][self.topo[:,0] >= point[0]]
+        #topo_left = self.topo[ np.round(self.topo[:,0], 6) == \
+        #                       np.round(np.max(x_left), 6) ]
+        #topo_right = self.topo[ np.round(self.topo[:,0], 6) == \
+        #                        np.round(np.min(x_right), 6) ]
+        #point = self.topo[ np.round(self.topo[:,0], 6) == \
+        #                       np.round(np.max(x_left), 6) ]
+        #continue
+        topo_left = self.topo[ np.round(self.topo[:,0], 6) <= \
+                               np.round(np.max(x_left), 6) ]
+        for item in topo_left[::-1]:
+          topo_updates.append(item)
+        break
+      
       """
       if type(inLayer) is list:
         # Then, it is entering the outside world; use topography to find a
@@ -195,7 +228,7 @@ class Terrapin(object):
         point = self.topo[ np.round(self.topo[:,0], 6) == \
                                np.round(np.max(x_left), 6) ]
       """
-        
+      
       if point is not None:
         # Carry on, cowboy/girl!
         # slope-intercept
@@ -1038,6 +1071,7 @@ class Terrapin(object):
         if (z_xmin_pwl == z_xmin_pwl[0]).all():
           z_xmin_pwl = z_xmin_pwl[0]
         else:
+          print x, pwl
           sys.exit(">1 possible point at x; not a function!")
       z_xmax_pwl = (pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
       if len(z_xmax_pwl) > 1:
@@ -1264,18 +1298,21 @@ class Terrapin(object):
         # And choose the leftmost if two come together
         #layer_number = -1
         #print "NO UNIT!"
+        """
         try:
           layer_top_numbers_at_point_elevation = \
               layer_top_numbers_at_point_elevation[Lrad == np.nanmin(Lrad)][0]
         except:
           layer_top_numbers_at_point_elevation = \
               layer_top_numbers_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
+        """
+        layer_number = -1
         #layer_number = [layer_top_numbers_at_point_elevation, 'entering free space']
         #layer_top_numbers_at_point_elevation = 0
       else:
         layer_top_numbers_at_point_elevation = unit_number_inside
         # Define layer_number
-      layer_number = int(layer_top_numbers_at_point_elevation)
+        layer_number = int(layer_top_numbers_at_point_elevation)
         #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
         #         "did not yet prepare for it in the code.\n"+ \
         #         "Better do that now! [mid-layer]")
