@@ -189,7 +189,7 @@ class Terrapin(object):
           z_topo = np.array(z_topo)
           # And pick upslope layer, if in doubt.
           inLayer = self.layer_numbers[ \
-                         np.round(z_topo, 6) == np.round(point[1], 6)][0]
+                         np.round(z_topo, 5) == np.round(point[1], 5)][0]
       
       elif inLayer == -1:
         # Then, it is entering the outside world; use topography to find a
@@ -199,12 +199,12 @@ class Terrapin(object):
         # Was going to calculate angle, but really no need. Just find next
         # point to the right that is on topo
         #x_right = self.topo[:,0][self.topo[:,0] >= point[0]]
-        #topo_left = self.topo[ np.round(self.topo[:,0], 6) == \
-        #                       np.round(np.max(x_left), 6) ]
-        #topo_right = self.topo[ np.round(self.topo[:,0], 6) == \
-        #                        np.round(np.min(x_right), 6) ]
-        #point = self.topo[ np.round(self.topo[:,0], 6) == \
-        #                       np.round(np.max(x_left), 6) ]
+        #topo_left = self.topo[ np.round(self.topo[:,0], 5) == \
+        #                       np.round(np.max(x_left), 5) ]
+        #topo_right = self.topo[ np.round(self.topo[:,0], 5) == \
+        #                        np.round(np.min(x_right), 5) ]
+        #point = self.topo[ np.round(self.topo[:,0], 5) == \
+        #                       np.round(np.max(x_left), 5) ]
         #continue
         topo_left = self.topo[ np.round(self.topo[:,0], 6) <= \
                                np.round(np.max(x_left), 6) ]
@@ -221,12 +221,12 @@ class Terrapin(object):
         # Was going to calculate angle, but really no need. Just find next
         # point to the right that is on topo
         #x_right = self.topo[:,0][self.topo[:,0] >= point[0]]
-        #topo_left = self.topo[ np.round(self.topo[:,0], 6) == \
-        #                       np.round(np.max(x_left), 6) ]
-        #topo_right = self.topo[ np.round(self.topo[:,0], 6) == \
-        #                        np.round(np.min(x_right), 6) ]
-        point = self.topo[ np.round(self.topo[:,0], 6) == \
-                               np.round(np.max(x_left), 6) ]
+        #topo_left = self.topo[ np.round(self.topo[:,0], 5) == \
+        #                       np.round(np.max(x_left), 5) ]
+        #topo_right = self.topo[ np.round(self.topo[:,0], 5) == \
+        #                        np.round(np.min(x_right), 5) ]
+        point = self.topo[ np.round(self.topo[:,0], 5) == \
+                               np.round(np.max(x_left), 5) ]
       """
       
       if point is not None:
@@ -244,6 +244,8 @@ class Terrapin(object):
                                     piecewiseLinear=self.layer_tops[i], \
                                     starting_point=point))
         intersections = np.squeeze(np.array(intersections))
+        # Don't want to round the thing that goes into everything else!
+        # Keep this high precision and round later.
         intersections = np.round(intersections, 6)
         # First, use only those points are above the point in question
         # now handled in function
@@ -395,7 +397,7 @@ class Terrapin(object):
       for i in range(len(self.layer_tops)):
         layer_top = self.layer_tops[i]
         slopes = np.diff(layer_top[:,1]) / np.diff(layer_top[:,0])
-        slopes = np.round(slopes, 6)
+        slopes = np.round(slopes, 5)
         # Those with constant slopes on both sides are not needed
         not_needed = np.hstack(( False, slopes[:-1] == slopes[1:], False ))
         self.layer_tops[i] = self.layer_tops[i][not_needed == False]
@@ -483,8 +485,8 @@ class Terrapin(object):
         # Append on two conditions:
         # 1. > all others
         # 2. nan (i.e. no other in this place
-        gt_cond = point[1] >= self.piecewiseLinearAtX(point[0], 
-                                                      self.layer_tops[n])
+        gt_cond = np.round(point[1], 5) >= np.round( self.piecewiseLinearAtX(point[0], 
+                                                      self.layer_tops[n]), 5)
         nan_cond = np.isnan( self.piecewiseLinearAtX(point[0], 
                                                       self.layer_tops[n]) )
         if gt_cond or nan_cond:
@@ -617,7 +619,7 @@ class Terrapin(object):
         layer_elevations_at_x = np.array(layer_elevations_at_x)
         layer_elevations_at_x = \
               layer_elevations_at_x[np.isnan(layer_elevations_at_x) == False]
-        if (np.round(point[1], 6) >= np.round(np.array(layer_elevations_at_x), 6)).all():
+        if (np.round(point[1], 5) >= np.round(np.array(layer_elevations_at_x), 5)).all():
           if (point[0] == 0) and (point[1] >= self.z_ch):
             pass
           else:
@@ -813,8 +815,8 @@ class Terrapin(object):
         other_layer_tops_at_point = []
         for other_layer in other_layers:
           other_layer_tops_at_point.append(np.round(
-                           self.piecewiseLinearAtX(point[0], other_layer), 6))
-        #if (np.round(point[1], 6) > \
+                           self.piecewiseLinearAtX(point[0], other_layer), 5))
+        #if (np.round(point[1], 5) > \
         #           np.array(other_layer_tops_at_point)).all():
           # Although the first cut looked for layers below, not every layer is
           # completely below.
@@ -1020,7 +1022,7 @@ class Terrapin(object):
         # --> Removing this rounding because it is causing errors when compared
         # with un-rounded values.
         # Apply rounding later!
-        #intersections.append(np.round(np.array([xint, yint]), 6))
+        #intersections.append(np.round(np.array([xint, yint]), 5))
         intersections.append(np.array([xint, yint]))
     # Always return 2D array
     intersections = np.array(intersections, ndmin=2)
@@ -1274,7 +1276,7 @@ class Terrapin(object):
       L = np.array(L)
       R = np.array(R)
       # Check if any of these points is the center
-      iscenter = np.prod(np.round(L, 6) == np.round(C, 6), axis=1, \
+      iscenter = np.prod(np.round(L, 5) == np.round(C, 5), axis=1, \
                                                            dtype=bool)
       # Convert to radial coordinates: arctan(y/x)
       Lrad = np.arctan2( L[:,1] - C[1], L[:,0] - C[0] )
