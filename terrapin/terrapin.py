@@ -1197,10 +1197,10 @@ class Terrapin(object):
     #print layer_top_elevations_at_point
     #print point[1]
     #print (layer_top_elevations_at_point != point[1]).all()
-    layer_tops_at_point_elevation = (np.round(layer_top_elevations_at_point, 6) \
-                                     == np.round(point[1], 6))
-    layer_bottoms_at_point_elevation = (np.round(layer_bottom_elevations_at_point, 6) \
-                                     == np.round(point[1], 6))
+    layer_tops_at_point_elevation = (np.round(layer_top_elevations_at_point, 5) \
+                                     == np.round(point[1], 5))
+    layer_bottoms_at_point_elevation = (np.round(layer_bottom_elevations_at_point, 5) \
+                                     == np.round(point[1], 5))
     layers_at_point_elevation = layer_tops_at_point_elevation + \
                                 layer_bottoms_at_point_elevation
     if point_above_all_layers:
