@@ -774,8 +774,8 @@ class Terrapin(object):
   
   def calc_layer_boundary(self, layer_top):
 
-  #self.layers = []
-  #for layer_top in self.layer_tops:
+    #self.layers = []
+    #for layer_top in self.layer_tops:
     # Set-up    
     left = layer_top[0,0]
     right = layer_top[-1,0]
@@ -820,8 +820,8 @@ class Terrapin(object):
           # completely below.
           # So check that all new points are below.
           #print point, self.piecewiseLinearAtX(point[0], layer_top)
-        if np.round(point[1], 6) < \
-                 np.round(self.piecewiseLinearAtX(point[0], layer_top), 6):
+        if np.round(point[1], 5) < \
+                 np.round(self.piecewiseLinearAtX(point[0], layer_top), 5):
           bottom_points.append(point)
     # For bottom layer
     if len(bottom_points) == 0:
@@ -1134,7 +1134,8 @@ class Terrapin(object):
   def nextToWhichLayer(self, point):
     self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideOrEnteringWhichLayer(self, point, from_point=None, layer_tops=None, layer_bottoms=None, layer_numbers=None):
+  #, layer_tops=None, layer_bottoms=None, layer_numbers=None
+  def insideOrEnteringWhichLayer(self, point, from_point=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -1152,13 +1153,18 @@ class Terrapin(object):
     
     #print 'point', point
 
-    if layer_tops is None:
-      layer_tops = self.layer_tops
-    if layer_bottoms is None:
-      self.calc_layer_bottoms()
-      layer_bottoms = self.layer_bottoms
-    if layer_numbers is None:
-      layer_numbers=self.layer_numbers
+    layer_tops = self.layer_tops
+    self.calc_layer_bottoms()
+    layer_bottoms = self.layer_bottoms
+    layer_numbers=self.layer_numbers
+
+    #    if layer_tops is None:
+    #      layer_tops = self.layer_tops
+    #    if layer_bottoms is None:
+    #      self.calc_layer_bottoms()
+    #      layer_bottoms = self.layer_bottoms
+    #    if layer_numbers is None:
+    #      layer_numbers=self.layer_numbers
     
     layer_number = None # Flag before being actual number
 
@@ -1261,9 +1267,9 @@ class Terrapin(object):
         #dist = self.layer_tops[ltnum]
         # Flip these at the end -- opposite orientation for bottom
         # Really CCW vs CW, not L vs R so much
-        if isleft.any():
-          L.append(l[isright][-1,:]) # rightmost left point
         if isright.any():
+          L.append(l[isright][-1,:]) # rightmost left point
+        if isleft.any():
           R.append(l[isleft][0,:]) # leftmost right point
       L = np.array(L)
       R = np.array(R)
