@@ -125,9 +125,9 @@ class Terrapin(object):
     else:
       sys.exit("Warning: dz is not finite")
     #print self.topo
-    for layer_top in self.layer_tops:
-      print layer_top
-    print ""
+    #for layer_top in self.layer_tops:
+      #print layer_top
+    #print ""
 
   def updateFluvialTopo_y(self):
     """
@@ -156,7 +156,7 @@ class Terrapin(object):
     while point is not None:
       #if (point == -np.inf).any():
       #  break
-      print "&&&&", point, from_point
+      #print "&&&&", point, from_point
       point = np.squeeze(point)
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
@@ -164,7 +164,7 @@ class Terrapin(object):
         # An option: is above everything
         z_topo = self.piecewiseLinearAtX(point[0], self.topo)
         if point[1] > z_topo:
-          print "OUT!!!"
+          #print "OUT!!!"
           # Above all? Then should be at the top.
           # After going above topographic surface, nothing to do.
           point = None # break out of loop.
@@ -178,7 +178,8 @@ class Terrapin(object):
           # And pick upslope layer, if in doubt.
           inLayer = self.layer_numbers[ \
                          np.round(z_topo, 6) == np.round(point[1], 6)][0]
-        
+      
+      """
       if type(inLayer) is list:
         # Then, it is entering the outside world; use topography to find a
         # temporary "angle of repose".
@@ -193,12 +194,14 @@ class Terrapin(object):
         #                        np.round(np.min(x_right), 6) ]
         point = self.topo[ np.round(self.topo[:,0], 6) == \
                                np.round(np.max(x_left), 6) ]
+      """
         
-      elif point is not None:
+      if point is not None:
         # Carry on, cowboy/girl!
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
+        print m
         b = point[1] - m*point[0]
         # Find intersection with each layer
         intersections = []
@@ -208,6 +211,7 @@ class Terrapin(object):
                                     piecewiseLinear=self.layer_tops[i], \
                                     starting_point=point))
         intersections = np.squeeze(np.array(intersections))
+        intersections = np.round(intersections, 6)
         # First, use only those points are above the point in question
         # now handled in function
         #intersections[intersections[:,1] <= point[1]] = np.nan
@@ -218,12 +222,16 @@ class Terrapin(object):
         else:
           path_lengths = ( (intersections[:,0] - point[0])**2 \
                          + (intersections[:,1] - point[1])**2 )
-          # And of these nonzero paths, find the shortest, and this is the
+          path_lengths_nonzero = path_lengths[path_lengths > 0]
+          # And of these nonzero paths, find the shortest that is not at the 
+          # same location as the point, and this is the
           # chosen intersection
+          # WILL THIS CAUSE PROBLEMS WHEN WE INCISE EXACTLY TO THE LEVEL OF A 
+          # LAYER? PROBABLY NOT -- JUST LOOKING ABOVE IT.
           # Chosen layer number will work here because self.layer_numbers is
           # ordered just by a np.arange (so same)
           chosen_layer_number = (path_lengths == \
-                                 np.nanmin(path_lengths)).nonzero()[0][0]
+                                 np.nanmin(path_lengths_nonzero)).nonzero()[0][0]
           chosenIntersection = intersections[chosen_layer_number]
           chosen_layer_numbers.append(chosen_layer_number)
           topo_updates.append(chosenIntersection)
@@ -233,8 +241,8 @@ class Terrapin(object):
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
 
-      print "TOPO UPDATES"
-      print topo_updates
+      #print "TOPO UPDATES"
+      #print topo_updates
       self.topo = self.newIncisedTopo(topo_updates)
       
       # Completely remove all layers that lie entirely above topography
@@ -246,7 +254,7 @@ class Terrapin(object):
           topo_at_layer_points.append(self.piecewiseLinearAtX(point[0], self.topo))
         topo_at_layer_points = np.array(topo_at_layer_points)
         if (topo_at_layer_points < layer[:,1]).all():
-          print n
+          #print n
           self.layer_numbers = np.arange(len(self.layer_numbers)-1) # renumber
                                    # to keep indices and layer_numbers the same
           self.layer_names.pop(n)
@@ -270,7 +278,7 @@ class Terrapin(object):
               y_layer_bottom = self.piecewiseLinearAtX(x_topo, \
                                              self.initial_layer_bottoms[i])
               if y_topo >= y_layer_bottom:
-                print topo_point
+                #print topo_point
                 self.layer_tops[i] = np.vstack((self.layer_tops[i], topo_point))
             # Unless this was not an original layer.
             else:
@@ -282,11 +290,13 @@ class Terrapin(object):
         for point in self.layer_tops[i]:
           x_layer_top = point[0]
           y_layer_top = point[1]
+          #print "***"
+          #print x_layer_top, self.topo, "***"
           y_topo = self.piecewiseLinearAtX(x_layer_top, self.topo)
           if y_topo >= y_layer_top:
             #print point
             layer_top_trimmed.append(point)
-        print np.array(layer_top_trimmed)
+        #print np.array(layer_top_trimmed)
         self.layer_tops[i] = np.array(layer_top_trimmed)
 
       # Then update topo to agree with layer tops;
@@ -340,6 +350,7 @@ class Terrapin(object):
       
       # Remove duplicate points
       self.layer_tops = self.rmdup(self.layer_tops)
+      self.topo = self.rmdup(self.topo)
       
       # Then sort it all
       for i in range(len(self.layer_tops)):
@@ -415,8 +426,8 @@ class Terrapin(object):
     # Combine adjacent layers of alluvium #
     #######################################
     touching_layers = self.layersTouchedByLayer(new_layer_name)
-    print ""
-    print touching_layers
+    #print ""
+    #print touching_layers
     #if touching_layers == self.layers_touching.any()
     layers_touched_logical = np.in1d(self.layer_numbers, touching_layers)
     layer_lithologies_touched = np.array(self.layer_lithologies) \
@@ -448,7 +459,7 @@ class Terrapin(object):
         else:
           point_geq_layer.append(False)
       if np.array(point_geq_layer).all():
-        print point
+        #print point
         combined_layer_top.append(point)
     combined_layer_top = np.array(combined_layer_top)
     combined_layer_top = self.rmdup(combined_layer_top)
@@ -456,10 +467,12 @@ class Terrapin(object):
     # Remove layers with higher layer numbers
     for n in touching_alluvial_layer_numbers[touching_alluvial_layer_numbers!=
                                      np.min(touching_alluvial_layer_numbers)]:
-      self.layer_numbers = np.delete(self.layer_numbers, n)
-      self.layer_names.pop(n)
-      self.layer_lithologies.pop(n)
-      self.layer_tops.pop(n)
+      print n
+      lni = int((self.layer_numbers == n).nonzero()[0])
+      self.layer_numbers = np.delete(self.layer_numbers, lni)
+      self.layer_names.pop(lni)
+      self.layer_lithologies.pop(lni)
+      self.layer_tops.pop(lni)
     self.layer_tops[np.min(touching_alluvial_layer_numbers)] = \
                                                            combined_layer_top
 
@@ -609,8 +622,8 @@ class Terrapin(object):
                                               
     # 1. Add new channel
     layers = np.array(layers)
-    print 'layers\n',layers
-    print '***', np.max(layers[:,0]), np.min(layers[:,0])
+    #print 'layers\n',layers
+    #print '***', np.max(layers[:,0]), np.min(layers[:,0])
     topo = np.vstack(( self.topo[self.topo[:,0] < np.min(layers[:,0])], \
                        np.array([[0, self.z_ch]]) ))
     
@@ -623,7 +636,7 @@ class Terrapin(object):
     
     # 3. Place in order    
     topo = topo[topo[:,0].argsort()]
-    print '***', topo
+    #print '***', topo
 
     # 4. Then check for unnecesssary points and remove them
     slopes = np.diff(topo[:,1]) / np.diff(topo[:,0])
@@ -768,15 +781,15 @@ class Terrapin(object):
         for other_layer in other_layers:
           other_layer_tops_at_point.append(np.round(
                            self.piecewiseLinearAtX(point[0], other_layer), 6))
-        if (np.round(point[1], 6) > \
-                   np.array(other_layer_tops_at_point)).all():
+        #if (np.round(point[1], 6) > \
+        #           np.array(other_layer_tops_at_point)).all():
           # Although the first cut looked for layers below, not every layer is
           # completely below.
           # So check that all new points are below.
-          print point, self.piecewiseLinearAtX(point[0], layer_top)
-          if np.round(point[1], 6) < \
-                   np.round(self.piecewiseLinearAtX(point[0], layer_top), 6):
-            bottom_points.append(point)
+          #print point, self.piecewiseLinearAtX(point[0], layer_top)
+        if np.round(point[1], 6) < \
+                 np.round(self.piecewiseLinearAtX(point[0], layer_top), 6):
+          bottom_points.append(point)
     # For bottom layer
     if len(bottom_points) == 0:
       bottom_points = np.array([[0, -np.inf], [-np.inf, -np.inf]])
@@ -794,12 +807,12 @@ class Terrapin(object):
     """
     A wrapper for "layer bottom" to update all layer bottoms
     """
-    layer_bottoms = []
+    self.layer_bottoms = []
     for i in range(len(self.layer_tops)):
-      layer_bottoms.append(self.calc_layer_bottom(self.layer_boundaries[i],
+      self.layer_bottoms.append(self.calc_layer_bottom(self.layer_boundaries[i],
                                                   self.layer_tops[i]))
 
-    return layer_bottoms
+    return self.layer_bottoms
   
   def calc_layer_bottom(self, layer_boundary, layer_top):
     """
@@ -1046,7 +1059,11 @@ class Terrapin(object):
     # At this point, must be just one value, but this would be the place to 
     # add a check for it if I'm worried.
     
-    return z[0]
+    # Maybe an array was input, maybe not
+    try:
+      return z[0]
+    except:
+      return z
     
   def piecewiseLinearAtZ(self, z, pwl):
     """
@@ -1083,7 +1100,7 @@ class Terrapin(object):
   def nextToWhichLayer(self, point):
     self.layer_tops[self.layer_lithologies == 'alluvium']
   
-  def insideOrEnteringWhichLayer(self, point, from_point=None, layers=None, layer_numbers=None):
+  def insideOrEnteringWhichLayer(self, point, from_point=None, layer_tops=None, layer_bottoms=None, layer_numbers=None):
     """
     Point is (x,z)
     This script will return which layer the point is in.
@@ -1099,24 +1116,31 @@ class Terrapin(object):
     Defaults to work on the standard list of layers.
     """
     
-    print 'point', point
+    #print 'point', point
 
-    if layers is None:
-      layers = self.layer_tops
+    if layer_tops is None:
+      layer_tops = self.layer_tops
+    if layer_bottoms is None:
+      self.calc_layer_bottoms()
+      layer_bottoms = self.layer_bottoms
     if layer_numbers is None:
       layer_numbers=self.layer_numbers
     
     layer_number = None # Flag before being actual number
 
-    if type(layers) == np.ndarray:
-      layers = [layers]
+    if type(layer_tops) == np.ndarray:
+      layer_tops = [layer_tops]
+    if type(layer_bottoms) == np.ndarray:
+      layer_bottoms = [layer_bottoms]
     
-    layer_elevations_at_point = []
-    for i in range(len(layers)):
-      print '***', point
-      layer_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layers[i]))
-    layer_elevations_at_point = np.array(layer_elevations_at_point)
-    
+    layer_top_elevations_at_point = []
+    layer_bottom_elevations_at_point = []
+    for i in range(len(layer_tops)):
+      #print '***', point
+      layer_top_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layer_tops[i]))
+      layer_bottom_elevations_at_point.append(self.piecewiseLinearAtX(point[0], layer_bottoms[i]))
+    layer_top_elevations_at_point = np.array(layer_top_elevations_at_point)
+    layer_bottom_elevations_at_point = np.array(layer_bottom_elevations_at_point)
     # Need to check
     # 1. is point above all layers? if so, error.
     #        --> check that this works with aggradation
@@ -1128,13 +1152,17 @@ class Terrapin(object):
     # 1. Check if point is above all layers
     #    Later move this to the end, for efficiency.
     with np.errstate(invalid='ignore'):
-      layers_above_point = layer_elevations_at_point > point[1]
-      point_above_all_layers = (layer_elevations_at_point < point[1]).all()
-    print layer_elevations_at_point
-    print point[1]
-    print (layer_elevations_at_point != point[1]).all()
-    layers_at_point_elevation = (np.round(layer_elevations_at_point, 6)
-                                          == np.round(point[1], 6))
+      layers_above_point = layer_top_elevations_at_point > point[1]
+      point_above_all_layers = (layer_top_elevations_at_point < point[1]).all()
+    #print layer_top_elevations_at_point
+    #print point[1]
+    #print (layer_top_elevations_at_point != point[1]).all()
+    layer_tops_at_point_elevation = (np.round(layer_top_elevations_at_point, 6) \
+                                     == np.round(point[1], 6))
+    layer_bottoms_at_point_elevation = (np.round(layer_bottom_elevations_at_point, 6) \
+                                     == np.round(point[1], 6))
+    layers_at_point_elevation = layer_tops_at_point_elevation + \
+                                layer_bottoms_at_point_elevation
     if point_above_all_layers:
       # Must be above everything, the point is in free space!
       layer_elevation_point_is_inside = None
@@ -1147,75 +1175,35 @@ class Terrapin(object):
       # Point does not lie on a layer top, but there should be at least
       # one layer above it.
       layer_elevation_point_is_inside = \
-        np.min(layer_elevations_at_point[layers_above_point])
-      layer_number = layer_numbers[layer_elevations_at_point \
+        np.min(layer_top_elevations_at_point[layers_above_point])
+      layer_number = layer_numbers[layer_top_elevations_at_point \
                                    == layer_elevation_point_is_inside]
       if len(layer_number) > 1:
         sys.exit('entering too many layers!')
       else:
         layer_number = int(layer_number)
-        print "HERE HERE HERE"
-        print point,
-        print from_point
+        #print "HERE HERE HERE"
+        #print point,
+        #print from_point
     #elif (point == from_point).all():
     else:
       print "*****************************"
       # Otherwise the point is on a layer top
-      
-      # Delete the below soon? Or how to tell if point == from_point? ?????????????????
-      """
-      if (point == from_point).all():
-        # If this is the case, then we are at the first point in the layer.
-        # The layer top exists at our position.
-        with np.errstate(invalid='ignore'):
-          # There should be only one layer at this point's x, z position
-          layer_number = self.layer_numbers[layers_at_point_elevation]
-          try:
-            layer_number = int(layer_number)
-          except:
-            sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
-                     "did not yet prepare for it in the code.\n"+ \
-                     "Better do that now! [starting point]")
-      else:
-      """
-      # In a more general case, we need to consider the point that we are coming
-      # from, and which layer we are entering.
-      # This is because the layer being entered determines the next angle eroded
-      # through the layer, which is the main point (at least for now) of knowing
-      # which layer we are in -- so perhaps this should be changed to "in" or 
-      # "entering" in the function title
-      # Find layer boundary line going through this point,
-      # find angle of incidence of incoming line,
-      # and then find layer that is entered
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
-      layer_top_number_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
+      layer_top_numbers_at_point_elevation = self.layer_numbers[layer_tops_at_point_elevation]
+      layer_bottom_numbers_at_point_elevation = self.layer_numbers[layer_bottoms_at_point_elevation]
+      layer_numbers_at_point_elevation = self.layer_numbers[layers_at_point_elevation]
       # This helps if there are multiple layer tops at the layer elevation
 
-      # band-aid: just using slope.
-      # "else" version should be more generalized.
-      print 'TO', point
-      print 'FROM', from_point
-      """
-      # Are we at the river channel centerline? but why from_point?
-      if (from_point == np.array([0, self.z_ch])).all() and \
-         (layer_top_number_at_point_elevation == \
-         (len(self.layer_numbers)-1)).any():
-        layer_top_number_at_point_elevation = \
-                    np.min(layer_top_number_at_point_elevation)
-        layers_at_point_elevation[-1] = False
-        layer_number = 
-      # If not....
-      else:
-      """
       # Use angles
       # Line segment geometry
       C = point # center point
       # points around center
       L = [] # left sides of lines
       R = [] # right sides of lines
-      for ltnum in list(layer_top_number_at_point_elevation):
-        lt = self.layer_tops[ltnum]
-        vect = lt - C
+      for lnum in list(layer_top_numbers_at_point_elevation):
+        l = self.layer_tops[lnum]
+        vect = l - C
         vect_sign = np.sign(vect)
         # Is left (or on same point) if point is left or above (or equal
         # in each of these)
@@ -1224,17 +1212,31 @@ class Terrapin(object):
         isright = np.invert(isleft)
         #dist = self.layer_tops[ltnum]
         if isleft.any():
-          L.append(lt[isleft][-1,:]) # rightmost left point
+          L.append(l[isleft][-1,:]) # rightmost left point
         if isright.any():
-          R.append(lt[isright][0,:]) # leftmost right point
+          R.append(l[isright][0,:]) # leftmost right point
+      for lnum in list(layer_bottom_numbers_at_point_elevation):
+        l = self.layer_bottoms[lnum]
+        vect = l - C
+        vect_sign = np.sign(vect)
+        # Is left (or on same point) if point is left or above (or equal
+        # in each of these)
+        isleft = (vect_sign[:,0] <= 0) * (vect_sign[:,1] >= 0)
+        # otherwise is right
+        isright = np.invert(isleft)
+        #dist = self.layer_tops[ltnum]
+        # Flip these at the end -- opposite orientation for bottom
+        # Really CCW vs CW, not L vs R so much
+        if isleft.any():
+          L.append(l[isright][-1,:]) # rightmost left point
+        if isright.any():
+          R.append(l[isleft][0,:]) # leftmost right point
       L = np.array(L)
       R = np.array(R)
       # Check if any of these points is the center
       iscenter = np.prod(np.round(L, 6) == np.round(C, 6), axis=1, \
                                                            dtype=bool)
       # Convert to radial coordinates: arctan(y/x)
-      #Lvect = (L[:,1] - C[1]) / (L[:,0] - C[0])
-      #Rvect = (R[:,1] - C[1]) / (R[:,0] - C[0])
       Lrad = np.arctan2( L[:,1] - C[1], L[:,0] - C[0] )
       Lrad = np.array(Lrad)
       Lrad[Lrad<0] += 2*np.pi
@@ -1243,7 +1245,6 @@ class Terrapin(object):
       Rrad = np.array(Rrad)
       Rrad[Rrad<0] += 2*np.pi
       # Where does the line of erosion point
-      #Evect = point - from_point
       Erad = np.arctan2( point[1] - from_point[1], point[0] - from_point[0])
       Erad = np.array(Erad)
       if Erad<0:
@@ -1253,7 +1254,7 @@ class Terrapin(object):
       # Not sure why -- sort of arbitrary
       # (and just changed it.)
       unit_number_inside = \
-         layer_top_number_at_point_elevation[(Erad > Lrad) * (Erad <= Rrad)]
+         layer_numbers_at_point_elevation[(Erad > Lrad) * (Erad <= Rrad)]
       if len(unit_number_inside) > 1:
         # pass and sort out later on?
         sys.exit("How are we inside multiple layers?")
@@ -1261,21 +1262,25 @@ class Terrapin(object):
         # About to enter free space
         # Follow the surface
         # And choose the leftmost if two come together
-        layer_number = -1
+        #layer_number = -1
+        #print "NO UNIT!"
         try:
-          layer_top_number_at_point_elevation = \
-              layer_top_number_at_point_elevation[Lrad == np.nanmin(Lrad)][0]
+          layer_top_numbers_at_point_elevation = \
+              layer_top_numbers_at_point_elevation[Lrad == np.nanmin(Lrad)][0]
         except:
-          layer_top_number_at_point_elevation = \
-              layer_top_number_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
-        #layer_number = [layer_top_number_at_point_elevation, 'entering free space']
+          layer_top_numbers_at_point_elevation = \
+              layer_top_numbers_at_point_elevation[Rrad == np.nanmin(Rrad)][0]
+        #layer_number = [layer_top_numbers_at_point_elevation, 'entering free space']
+        #layer_top_numbers_at_point_elevation = 0
       else:
-        layer_top_number_at_point_elevation = unit_number_inside
+        layer_top_numbers_at_point_elevation = unit_number_inside
         # Define layer_number
-      layer_number = layer_top_number_at_point_elevation
+      layer_number = int(layer_top_numbers_at_point_elevation)
         #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
         #         "did not yet prepare for it in the code.\n"+ \
         #         "Better do that now! [mid-layer]")
+    
+    print layer_number
     return layer_number
     
   def unique_rows(self, array):
