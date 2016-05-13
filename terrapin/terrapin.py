@@ -1315,9 +1315,9 @@ class Terrapin(object):
         # Flip these at the end -- opposite orientation for bottom
         # Really CCW vs CW, not L vs R so much
         if isright.any():
-          L.append(l[isright][-1,:]) # rightmost left point
+          L.append(l[isright][0,:]) # rightmost left point, flipped
         if isleft.any():
-          R.append(l[isleft][0,:]) # leftmost right point
+          R.append(l[isleft][-1,:]) # leftmost right point, flipped
       L = np.array(L)
       R = np.array(R)
       # Check if any of these points is the center
