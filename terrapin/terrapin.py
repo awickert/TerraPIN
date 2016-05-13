@@ -153,7 +153,12 @@ class Terrapin(object):
     Constant lateral erosion with time 
     """
     # Start with a constant rate with time
-    point = self.topo[-1] - np.array([constant, 0])
+    leftmost_at_channel_level = \
+        np.nanmin(self.topo[:,0][self.topo[:,1] == self.z_ch])
+    point = np.squeeze( self.topo[self.topo[:,0] == leftmost_at_channel_level] \
+              - np.array([constant, 0]) )
+    #point = self.topo[-1] - np.array([constant, 0])
+    print 'POINT', point
     self.topo_updates = [point]
     self.erode(point)
   
@@ -186,6 +191,7 @@ class Terrapin(object):
       #  break
       #print "&&&&", point, from_point
       point = np.squeeze(point)
+      print point, from_point
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
