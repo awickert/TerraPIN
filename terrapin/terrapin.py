@@ -155,13 +155,21 @@ class Terrapin(object):
     # Start with a constant rate with time
     leftmost_at_channel_level = \
         np.nanmin(self.topo[:,0][self.topo[:,1] == self.z_ch])
-    point = np.squeeze( self.topo[self.topo[:,0] == leftmost_at_channel_level] \
-              - np.array([constant, 0]) )
+    #valley_middle_point = np.array([0, self.z_ch])
+    old_valley_floor_edge = np.squeeze( \
+                                        self.topo[self.topo[:,0] == \
+                                        leftmost_at_channel_level] )
+    point = old_valley_floor_edge - np.array([constant, 0])
     #point = self.topo[-1] - np.array([constant, 0])
     print 'POINT', point
+    #self.topo_updates = [valley_middle_point, old_valley_floor_edge, point]
     self.topo_updates = [point]
-    self.erode(point)
-  
+    self.erode(point, old_valley_floor_edge)
+    # Ensure that the sediments deposit appropriately, too.
+    #alluv_layer_number = self.insideOrEnteringWhichLayer(point)
+    #alluv_layer_tops = self.layer_tops[alluv_layer_number]
+    #alluv_layer_tops[
+    
   def channelGeometry(self):
     pass
 
@@ -176,7 +184,7 @@ class Terrapin(object):
     self.topo_updates = []
     self.erode(point)
     
-  def erode(self, point):
+  def erode(self, point, old_valley_floor_edge=None):
     """
     Erode layers -- good for incision or lateral motion
     """
@@ -186,6 +194,7 @@ class Terrapin(object):
     chosen_layer_numbers = []
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
+    ii = 0
     while point is not None:
       #if (point == -np.inf).any():
       #  break
@@ -292,8 +301,17 @@ class Terrapin(object):
           chosenIntersection = intersections[chosen_layer_number]
           chosen_layer_numbers.append(chosen_layer_number)
           self.topo_updates.append(chosenIntersection)
+          # For lateral erosion
+          if (ii == 0) and (old_valley_floor_edge is not None):
+            iii = (self.layer_numbers == chosen_layer_number).nonzero()[0][0]
+            self.layer_tops[iii] = \
+              np.vstack(( self.layer_tops[iii], old_valley_floor_edge ))
+            self.layer_tops[iii] = self.layer_tops[iii] \
+                                   [self.layer_tops[iii][:,0].argsort()]
+
           # Now note that chosenIntersection is the new starting point
           point = chosenIntersection.copy()
+          ii += 1
           
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
