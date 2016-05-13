@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import sys
 import fnmatch
+import copy
 
 class Terrapin(object):
   """
@@ -170,6 +171,99 @@ class Terrapin(object):
     #alluv_layer_tops = self.layer_tops[alluv_layer_number]
     #alluv_layer_tops[
     
+  def layer_boundaries_noinf(self, layers, infinity_to_left=None, \
+                             infinity_to_bottom=None, longreturn=False):
+    points = np.vstack(layers)
+    if infinity_to_left is None:
+      minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
+      infinity_to_left = minx_not_inf*1.2 - 1
+    if infinity_to_bottom is None:
+      miny_not_inf = np.min(points[np.isinf(points[:,1]) == False][:,1])
+      infinity_to_bottom = miny_not_inf*1.2 - 1
+    i=0
+    for layer in layers:
+      layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
+      layer[:,1][np.isinf(layer[:,1])] = infinity_to_bottom
+    if longreturn:
+      output = [layers, infinity_to_left, infinity_to_bottom]
+    else:
+      output = layers
+    return output
+
+  def layer_area_diff(self):
+    """
+    Assuming that the future layers (layer 2) will require equally or more
+    extensive boundaries than the past layers (layer 1)
+    """
+    layers1 = copy.deepcopy(self.layer_boundaries_before)
+    layers2 = copy.deepcopy(self.layer_boundaries)
+    areas1 = []
+    areas2 = []
+    # Get boundaries and values to turn -np.inf into for lbni2
+    lbni_out_2 = self.layer_boundaries_noinf(layers2, longreturn=True)
+    lbni2 = lbni_out_2[0]
+    lbni1 = self.layer_boundaries_noinf(layers1, 
+                                        infinity_to_left = lbni_out_2[1],
+                                        infinity_to_bottom = lbni_out_2[2])
+    # Now get areas
+    areas1 = self.get_all_areas(lbni1)
+    areas2 = self.get_all_areas(lbni2)
+    
+    # Now compare them
+    diff = []
+    layer_numbers_both_times = np.hstack (( self.layer_numbers, 
+                                            self.layer_numbers_before ))
+    layer_numbers_both_times = np.unique(layer_numbers_both_times)
+    for n in layer_numbers_both_times:
+      # If these layers don't exist, will be comparing arbitrary boundaries...
+      # For aggradation, probably not used, new layer is confined by valley.
+      # For incision, new layers would just not include old layer, and can't
+      #   erase anything that goes to infinity. So also just confined layers.
+      #   SO OK.
+      if (self.layer_numbers == n).any() and \
+                              (self.layer_numbers_before == n).any():
+        diff.append( areas2[self.layer_numbers == n] - \
+                     areas1[self.layer_numbers_before == n] )
+      elif self.layer_numbers_before == n:
+        diff.append( - areas1[self.layer_numbers_before == n] )
+      elif self.layer_numbers == n:
+        # Shouldn't happen -- shouldn't run this while aggrading.
+        # (Though possible in lateral migration phase of aggradation)
+        diff.append( areas2[self.layer_numbers == n] )
+      else:
+        sys.exit()
+
+    diff = np.squeeze(np.array(diff))
+    return diff
+
+  def diff_bedrock(self):
+    darea = self.layer_area_diff()
+    # Should only incise and lose layers for erosion
+    layer_lithologies = np.array(self.layer_lithologies_before)
+    isbedrock = (layer_lithologies != 'colluvium') * \
+                (layer_lithologies != 'alluvium')
+    # Layers should stay in order, so:
+    darea_br = np.sum(darea[isbedrock])
+    return darea_br
+  
+  def get_all_areas(self, layers):
+    areas = []
+    lbni = self.layer_boundaries_noinf(layers)
+    for layer in lbni:
+      areas.append( self.area(layer) )
+    areas = np.array(areas)
+    return areas
+
+  def area(self, layer):
+    cp = 0
+    x = layer[:,0]
+    y = layer[:,1]
+    for i in range(len(layer)-1):
+      # Cross product
+      cp += x[i]*y[i+1] - x[i+1]*y[i]
+    area = 0.5 * np.abs(np.sum(cp))
+    return area
+
   def channelGeometry(self):
     pass
 
@@ -194,6 +288,15 @@ class Terrapin(object):
     chosen_layer_numbers = []
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
+    # Old layers
+    #self.topo_before = self.topo.copy()
+    #self.layer_tops_before = self.layer_tops[:]
+    #self.layer_bottoms_before = self.layer_bottoms[:]
+    self.layer_boundaries_before = self.layer_boundaries[:]
+    self.layer_numbers_before = self.layer_numbers[:]
+    self.layer_names_before = self.layer_names[:]
+    self.layer_lithologies_before = self.layer_lithologies[:]
+    #
     ii = 0
     while point is not None:
       #if (point == -np.inf).any():
@@ -301,7 +404,8 @@ class Terrapin(object):
           chosenIntersection = intersections[chosen_layer_number]
           chosen_layer_numbers.append(chosen_layer_number)
           self.topo_updates.append(chosenIntersection)
-          # For lateral erosion
+          # For lateral erosion:
+          # Lateral beveled strath alongside alluvial valley
           if (ii == 0) and (old_valley_floor_edge is not None):
             iii = (self.layer_numbers == chosen_layer_number).nonzero()[0][0]
             self.layer_tops[iii] = \
@@ -424,8 +528,8 @@ class Terrapin(object):
       """
       
       # Remove duplicate points
-      self.layer_tops = self.rmdup(self.layer_tops)
-      self.topo = self.rmdup(self.topo)
+      self.layer_tops = self.rmdup_rows(self.layer_tops)
+      self.topo = self.rmdup_rows(self.topo)
       
       # Then sort it all
       for i in range(len(self.layer_tops)):
@@ -443,7 +547,7 @@ class Terrapin(object):
         self.layer_tops[i] = self.layer_tops[i][not_needed == False]
       
 
-  def rmdup(self, layers):
+  def rmdup_rows(self, layers):
     """
     removing duplicates following the answer at:
     http://stackoverflow.com/questions/16970982/find-unique-rows-in-numpy-array/
@@ -537,7 +641,7 @@ class Terrapin(object):
         #print point
         combined_layer_top.append(point)
     combined_layer_top = np.array(combined_layer_top)
-    combined_layer_top = self.rmdup(combined_layer_top)
+    combined_layer_top = self.rmdup_rows(combined_layer_top)
         
     # Remove layers with higher layer numbers
     for n in touching_alluvial_layer_numbers[touching_alluvial_layer_numbers!=
@@ -639,7 +743,7 @@ class Terrapin(object):
     # but valley fill comes after this.
     topo.append(self.topoBCinf())
     topo = np.array(topo)[::-1]
-    topo = self.rmdup(topo)
+    topo = self.rmdup_rows(topo)
     topo = topo[ topo[:,0].argsort()]
     # Not final topo -- intermediate step.
     # So don't update self.topo
@@ -733,7 +837,7 @@ class Terrapin(object):
     # but valley fill comes after this.
     topo.append(self.topoBCinf())
     topo = np.array(topo)[::-1]
-    topo = self.rmdup(topo)
+    topo = self.rmdup_rows(topo)
     topo = topo[ topo[:,0].argsort()]
     # Not final topo -- intermediate step.
     # So don't update self.topo
@@ -789,23 +893,19 @@ class Terrapin(object):
         layers[i] = np.vstack(( layers[i],
                                 np.array([-1, 1]) * layers[i][::-1] ))
     """
-    points = np.vstack(layers)
-    minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
-    infinity_to_left = minx_not_inf*2 - 1
-    miny_not_inf = np.min(points[np.isinf(points[:,1]) == False][:,1])
-    infinity_to_bottom = miny_not_inf*1.2 - 1
+    layers = self.layer_boundaries_noinf(layers)
     i=0
-    color_cycle = ['r', 'g', 'b', 'c', 'm', 'y']
+    #color_cycle = ['r', 'g', 'b', 'c', 'm', 'y']
+    color_cycle = ['rosybrown', 'lightgreen', 'lightskyblue', 'c', 'm', 'y']
     for layer in layers:
-      layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
-      layer[:,1][np.isinf(layer[:,1])] = infinity_to_bottom
       layer[:,1] *= -1 # depth increases dowrnward
-      shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_lithologies[i])
+      shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_names[i])
+      #shape = plt.Polygon(layer, edgecolor='k', facecolor='w', label=self.layer_names[i])
       stratum = ax.add_patch(shape)
-      #if self.layer_lithologies[i] == 'bedrock':
-      #  stratum.set_hatch('/-')
-      #if self.layer_lithologies[i] == 'alluvium':
-      #  stratum.set_hatch('..')
+      if self.layer_lithologies[i] == 'bedrock':
+        stratum.set_hatch('//')
+      if self.layer_lithologies[i] == 'alluvium':
+        stratum.set_hatch('..')
       i+=1
     # plotting limits
     all_points = np.vstack(layers)
