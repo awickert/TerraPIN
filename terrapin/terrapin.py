@@ -294,7 +294,7 @@ class Terrapin(object):
           self.topo_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
           point = chosenIntersection.copy()
-      
+          
     if topodefflag is False:
       # Wait until the end to update the cross-sectional profile
 
