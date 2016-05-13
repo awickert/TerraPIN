@@ -146,13 +146,15 @@ class Terrapin(object):
     Lateral migration
     """
     pass
+    self.lateralErosionConstant()
     
-  def lateralErosionConstant(self, constant=1):
+  def lateralErosionConstant(self, constant=5):
     """
     Constant lateral erosion with time 
     """
     # Start with a constant rate with time
-    pass
+    point = self.topo[-1] - np.array([constant, 0])
+    self.erode(point)
   
   def channelGeometry(self):
     pass
@@ -171,7 +173,6 @@ class Terrapin(object):
     """
     Erode layers -- good for incision or lateral motion
     """
-    point = np.array([0, self.z_ch])
     from_point = None # NULL in future
     # "topo_updates" holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
@@ -750,9 +751,19 @@ class Terrapin(object):
     plt.ylabel('Distance below plateau surface [m]', fontsize=16)
     plt.gca().invert_yaxis()
 
-  def layerPlot(self):
+  def layerPlot(self, twoSided=False):
     fig, ax = plt.subplots()
     layers = self.calc_layer_boundaries()
+    """
+    if twoSided:
+      for i in range(len(layers)):
+        #layers[i] = np.vstack(( self.layer_tops[i],
+        #                        np.array([-1, 1]) * self.layer_tops[i][::-1],
+        #                        np.array([-1, 1]) * self.layer_bottoms[i][::-1],
+        #                        self.layer_bottoms[i] ))
+        layers[i] = np.vstack(( layers[i],
+                                np.array([-1, 1]) * layers[i][::-1] ))
+    """
     points = np.vstack(layers)
     minx_not_inf = np.min(points[np.isinf(points[:,0]) == False][:,0])
     infinity_to_left = minx_not_inf*2 - 1
@@ -763,13 +774,13 @@ class Terrapin(object):
     for layer in layers:
       layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
       layer[:,1][np.isinf(layer[:,1])] = infinity_to_bottom
-      layer[:,1] *= -1 # depth increases downward
+      layer[:,1] *= -1 # depth increases dowrnward
       shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_lithologies[i])
       stratum = ax.add_patch(shape)
-      if self.layer_lithologies[i] == 'bedrock':
-        stratum.set_hatch('*')
-      if self.layer_lithologies[i] == 'alluvium':
-        stratum.set_hatch('.')
+      #if self.layer_lithologies[i] == 'bedrock':
+      #  stratum.set_hatch('/-')
+      #if self.layer_lithologies[i] == 'alluvium':
+      #  stratum.set_hatch('..')
       i+=1
     # plotting limits
     all_points = np.vstack(layers)
@@ -1037,7 +1048,8 @@ class Terrapin(object):
       xint = (b_pwl - b)/(m - m_pwl)
       # Next, see if the point exists
       # >= and <= to end on the first one it hits
-      if (xint >= xy0[0]) and (xint <= xy1[0]):
+      if (np.round(xint, 5) >= np.round(xy0[0], 5)) and \
+        (np.round(xint, 5) <= np.round(xy1[0], 5)):
         # You're done!
         # y-value plugging into one equations -- let's use the line from the 
         # starting point that is producing the erosion
