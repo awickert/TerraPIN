@@ -57,6 +57,8 @@ class Terrapin(object):
     self.z_ch = 0.
     # Angle of repose of alluvium
     alpha_a = 32.
+    # Angle of repose of colluvium
+    alpha_c = 20.
     # Angle of repose of bedrock 
     alpha_r = 75.
     # PROBABLY PUT THESE TWO IN A LIST TO WRITE MORE GENERAL CODE THAT CAN 
@@ -96,7 +98,9 @@ class Terrapin(object):
     self.layer_names = ['bedrock', 'alluvium']
     self.layer_numbers = np.arange(len(self.layer_tops))
     """
-    self.alpha = {'bedrock': alpha_r, 'alluvium': alpha_a}
+    self.alpha = {'bedrock': alpha_r, 
+                  'alluvium': alpha_a,
+                  'colluvium': alpha_c}
     self.k = {'bedrock': k_r, 'alluvium': k_a}
     self.layer_tops = [z_br, z_sed]
     self.layer_names = ['bedrock_0', 'alluvium_0']
@@ -224,9 +228,9 @@ class Terrapin(object):
                               (self.layer_numbers_before == n).any():
         diff.append( areas2[self.layer_numbers == n] - \
                      areas1[self.layer_numbers_before == n] )
-      elif self.layer_numbers_before == n:
+      elif (self.layer_numbers_before == n).any():
         diff.append( - areas1[self.layer_numbers_before == n] )
-      elif self.layer_numbers == n:
+      elif (self.layer_numbers == n).any():
         # Shouldn't happen -- shouldn't run this while aggrading.
         # (Though possible in lateral migration phase of aggradation)
         diff.append( areas2[self.layer_numbers == n] )
@@ -245,7 +249,133 @@ class Terrapin(object):
     # Layers should stay in order, so:
     darea_br = np.sum(darea[isbedrock])
     return darea_br
-  
+
+  def collluvial_pile(self):
+    """
+    Turn eroded material into a colluvial pile with an appropriate angle
+    of repose.
+    
+    If the river is incising, assume that it removes the colluvium.
+    Later, add this as an impediment to incision.
+    
+    If the river is widening, then pile colluvium to either:
+    (a) an angle-of-repose pile equal to the volume of the deposit 
+        plus a "fluffing" factor related to porosity
+        (hard-coded to be equal to 0.35)
+    (b) a pile that goes directly from the cliff top to the river
+    
+    Only do this for bedrock: alluvium is assumed to be removed completely
+    (though these same area calculations will be important to determine how
+     much of the alluvial bank the river can move through in a given time)
+    """
+    # Constants
+    lambda_p = 0.35
+    angleOfRepose = self.alpha['colluvium']
+    m = - np.tan( (np.pi/180.) * angleOfRepose)
+    # Volume eroded
+    darea_br = self.diff_bedrock()
+    A_deposit = -1/(1-lambda_p) * darea_br
+    # Cliff top = first lip above river level.
+    cliff_top_point = self.topo[self.topo[:,1] > self.z_ch][-1]
+    cliff_bottom_point = self.topo[self.topo[:,1] == self.z_ch][0]
+    h_cliff = cliff_top_point[1] - cliff_bottom_point[1]
+    dy_cliff_base_to_channel = - cliff_bottom_point[0]
+    # Will it fit?
+    alpha = angleOfRepose * np.pi / 180.
+    beta = np.pi - np.arctan2( cliff_top_point[1] - cliff_bottom_point[1], \
+                               cliff_top_point[0] - cliff_bottom_point[0] )
+                           
+    #h = ( 2 * A_deposit * np.tan(alpha) * np.sin(beta) / np.cos(np.pi/2. - beta ) )**.5
+    #h = ( 2 * A_deposit * np.tan(alpha))**.5 <-- doesn't take br slope into account
+    height = ( 2*A_deposit * np.tan(alpha) / (1 - np.tan(alpha) * (1/np.tan(beta))) )**.5
+    base = 2 * A_deposit / height
+    enough_space = (height <= h_cliff) * (base <= dy_cliff_base_to_channel)
+    if enough_space:
+      # Intercept with fluvial layer
+      #b = point[1] - m*point[0]
+      #self.findIntersections(m, b, topo)
+      z_at_deposit_top = self.z_ch + height
+      x_at_deposit_top = self.piecewiseLinearAtZ(z_at_deposit_top, self.topo)
+      z_at_deposit_bottom = self.z_ch
+      x_at_deposit_bottom = base - dy_cliff_base_to_channel
+    # IN FUTURE, MUST FIND A WAY TO ACCOUNT FOR THIS MATERIAL!
+    elif (base > dy_cliff_base_to_channel):
+      x_at_deposit_bottom = 0
+      z_at_deposit_bottom = self.z_ch
+      #self.findIntersections(m, b, self.topo)
+      x_at_deposit_top, z_at_deposit_top = \
+          self.findLikelyBestIntersection( m=m, b=self.z_ch,
+          piecewiseLinear=self.topo,
+          starting_point=np.array([x_at_deposit_bottom, z_at_deposit_bottom]) )
+    elif (height > h_cliff):
+      x_at_deposit_top, z_at_deposit_top = cliff_top_point
+      x_at_deposit_bottom, z_at_deposit_bottom = \
+        self.findIntersections(m, 
+                               b = z_at_deposit_top - m*x_at_deposit_top,
+                                  piecewiseLinear = self.topo)[-1]
+
+    colluvial_layer_top = np.array([[x_at_deposit_top, z_at_deposit_top],
+                                    [x_at_deposit_bottom, z_at_deposit_bottom]])
+    
+    
+    
+      
+    """
+    # Triangle plus rectangle.
+    rock_triangle_base_width = cliff_bottom_point[0] - cliff_top_point[0]
+    full_base_width = - cliff_top_point[0]
+    height = cliff_top_point[1] - self.z_ch
+    max_area = 0.5 * (full_base_width - rock_triangle_base_width) * height
+    # max_area is always 0 for incision through something with a steeper
+    # angle of repose.
+
+    if max_area == 0:
+      print "Did you just incise? No space to depsit colluvium -- or too steep."
+      colluvial_layer_top = None
+    elif max_area <= A_deposit:
+      colluvial_layer_top = np.vstack((cliff_top_point,
+                                       np.array([0, self.z_ch]) ))
+    elif max_area > A_deposit:
+      # Angle diagram
+      alpha = angleOfRepose * np.pi / 180.
+      beta = np.pi - np.arctan2( cliff_top_point[1] - cliff_bottom_point[1], \
+                                 cliff_top_point[0] - cliff_bottom_point[0] )
+      h = ( 2 * A_deposit * np.sin(beta) / np.cos(np.pi/2. - beta ) )**.5
+
+      # commented earlier
+      # Rearrange triangle equation
+      # b_full = 2 * (A/h) + b_bedrock_triangle
+      deposit_width = 2 * (A_deposit / height) + rock_triangle_base_width
+      x_colluv_end = cliff_top_point[0] + deposit_width
+      colluvial_layer_top = np.vstack((cliff_top_point,
+                                       np.array([x_colluv_end, self.z_ch]) ))
+    """
+
+    if colluvial_layer_top is not None: # unnecessary if-statement, now
+      # Update layers
+      self.layer_tops.append(colluvial_layer_top)
+      self.layer_numbers = np.arange(len(self.layer_numbers)+1)
+      self.layer_lithologies.append('colluvium')
+      number_of_layers_of_colluvium = len(fnmatch.filter(self.layer_names, 'colluvium*'))
+      new_layer_name = 'colluvium_'+str(number_of_layers_of_colluvium)
+      self.layer_names.append(new_layer_name)
+      # Update topo
+      topo = self.topo.copy()
+      i = 0
+      rows_to_delete = []
+      for point in topo:
+        topo_at_colluv = self.piecewiseLinearAtX(point[0], colluvial_layer_top)
+        if np.round(topo_at_colluv, 5) >= np.round(point[1], 5):
+          print 'pop'
+          rows_to_delete.append(i)
+        i += 1
+      topo = np.delete(topo, rows_to_delete, axis=0)
+      topo = np.vstack((topo, colluvial_layer_top))
+      topo = topo[ topo[:,0].argsort()]
+      self.topo = topo.copy()
+      self.layer_boundaries = self.calc_layer_boundaries()
+      self.calc_layer_bottoms()
+
   def get_all_areas(self, layers):
     areas = []
     lbni = self.layer_boundaries_noinf(layers)
@@ -368,7 +498,7 @@ class Terrapin(object):
         # slope-intercept
         angleOfRepose = self.alpha[self.layer_lithologies[inLayer]]
         m = - np.tan( (np.pi/180.) * angleOfRepose)
-        print m
+        #print m
         b = point[1] - m*point[0]
         # Find intersection with each layer
         intersections = []
