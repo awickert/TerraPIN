@@ -154,6 +154,7 @@ class Terrapin(object):
     """
     # Start with a constant rate with time
     point = self.topo[-1] - np.array([constant, 0])
+    self.topo_updates = [point]
     self.erode(point)
   
   def channelGeometry(self):
@@ -167,6 +168,7 @@ class Terrapin(object):
     of sediments in the real world. Represent this in some way?
     """
     point = np.array([0, self.z_ch])
+    self.topo_updates = []
     self.erode(point)
     
   def erode(self, point):
@@ -176,7 +178,6 @@ class Terrapin(object):
     from_point = None # NULL in future
     # "topo_updates" holds new points that modify layers until the end,
     # when we are ready to update the whole system all at once
-    topo_updates = []
     chosen_layer_numbers = []
     #chosen_layer_numbers.append(self.insideWhichLayer(point))
     topodefflag = False
@@ -224,7 +225,7 @@ class Terrapin(object):
         topo_left = self.topo[ np.round(self.topo[:,0], 6) <= \
                                np.round(np.max(x_left), 6) ]
         for item in topo_left[::-1]:
-          topo_updates.append(item)
+          self.topo_updates.append(item)
         break
       
       """
@@ -284,7 +285,7 @@ class Terrapin(object):
                                  np.nanmin(path_lengths_nonzero)).nonzero()[0][0]
           chosenIntersection = intersections[chosen_layer_number]
           chosen_layer_numbers.append(chosen_layer_number)
-          topo_updates.append(chosenIntersection)
+          self.topo_updates.append(chosenIntersection)
           # Now note that chosenIntersection is the new starting point
           point = chosenIntersection.copy()
       
@@ -292,8 +293,8 @@ class Terrapin(object):
       # Wait until the end to update the cross-sectional profile
 
       #print "TOPO UPDATES"
-      #print topo_updates
-      self.topo = self.newIncisedTopo(topo_updates)
+      #print self.topo_updates
+      self.topo = self.newIncisedTopo(self.topo_updates)
       
       # Completely remove all layers that lie entirely above topography
       self.layer_boundaries = self.calc_layer_boundaries() # refresh      
