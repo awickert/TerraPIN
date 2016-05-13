@@ -146,6 +146,13 @@ class Terrapin(object):
     Lateral migration
     """
     pass
+    
+  def lateralErosionConstant(self, constant=1):
+    """
+    Constant lateral erosion with time 
+    """
+    # Start with a constant rate with time
+    pass
   
   def channelGeometry(self):
     pass
@@ -156,6 +163,13 @@ class Terrapin(object):
     material above.
     When collapse of bedrock does happen, it creates an angle-of-repose pile
     of sediments in the real world. Represent this in some way?
+    """
+    point = np.array([0, self.z_ch])
+    self.erode(point)
+    
+  def erode(self, point):
+    """
+    Erode layers -- good for incision or lateral motion
     """
     point = np.array([0, self.z_ch])
     from_point = None # NULL in future
@@ -713,6 +727,7 @@ class Terrapin(object):
   def topoPlot(self, linestyle='-'):
     # Should make ylim 0 at start to do this properly
     topoFinite = self.topo.copy()
+    topoFinite[:,1] *= -1
     if np.isinf(topoFinite).any():
       if len(topoFinite) > 2:
         xmin = self.topo[1,0]
@@ -731,7 +746,10 @@ class Terrapin(object):
     ylim_bottom = np.min(both_ylims)
     plt.ylim(( ylim_bottom, ylim_top ))
     plt.xlim((1.2*xmin, 0))
-  
+    plt.xlabel('Cross-valley distance [m]', fontsize=16)
+    plt.ylabel('Distance below plateau surface [m]', fontsize=16)
+    plt.gca().invert_yaxis()
+
   def layerPlot(self):
     fig, ax = plt.subplots()
     layers = self.calc_layer_boundaries()
@@ -745,8 +763,13 @@ class Terrapin(object):
     for layer in layers:
       layer[:,0][np.isinf(layer[:,0])] = infinity_to_left
       layer[:,1][np.isinf(layer[:,1])] = infinity_to_bottom
+      layer[:,1] *= -1 # depth increases downward
       shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_lithologies[i])
-      ax.add_patch(shape)
+      stratum = ax.add_patch(shape)
+      if self.layer_lithologies[i] == 'bedrock':
+        stratum.set_hatch('*')
+      if self.layer_lithologies[i] == 'alluvium':
+        stratum.set_hatch('.')
       i+=1
     # plotting limits
     all_points = np.vstack(layers)
@@ -758,7 +781,10 @@ class Terrapin(object):
     #labels = self.layer_lithologies
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
     #plt.setp(legend.get_texts(), fontsize='small')
-  
+    plt.xlabel('Cross-valley distance [m]', fontsize=16)
+    plt.ylabel('Distance below plateau surface [m]', fontsize=16)
+    plt.gca().invert_yaxis()
+
   def calc_layer_boundaries(self):
     """
     For each line segment:
