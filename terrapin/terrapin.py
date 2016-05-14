@@ -1006,8 +1006,8 @@ class Terrapin(object):
     ylim_bottom = np.min(both_ylims)
     plt.ylim(( ylim_bottom, ylim_top ))
     plt.xlim((1.2*xmin, 0))
-    plt.xlabel('Cross-valley distance [m]', fontsize=16)
-    plt.ylabel('Distance below plateau surface [m]', fontsize=16)
+    plt.xlabel('Cross-valley distance [m]', fontsize=16, fontweight='bold')
+    plt.ylabel('Distance below plateau surface [m]', fontsize=16, fontweight='bold')
     plt.gca().invert_yaxis()
 
   def layerPlot(self, twoSided=False):
@@ -1029,14 +1029,19 @@ class Terrapin(object):
     color_cycle = ['rosybrown', 'lightgreen', 'lightskyblue', 'c', 'm', 'y']
     for layer in layers:
       layer[:,1] *= -1 # depth increases dowrnward
-      shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], edgecolor='k', label=self.layer_names[i])
+      shape = plt.Polygon(layer, facecolor=color_cycle[i%len(color_cycle)], 
+                          edgecolor='k', linewidth=2, label=self.layer_names[i])
       #shape = plt.Polygon(layer, edgecolor='k', facecolor='w', label=self.layer_names[i])
       stratum = ax.add_patch(shape)
       if self.layer_lithologies[i] == 'bedrock':
         stratum.set_hatch('//')
-      if self.layer_lithologies[i] == 'alluvium':
+      elif self.layer_lithologies[i] == 'alluvium':
         stratum.set_hatch('..')
+      elif self.layer_lithologies[i] == 'colluvium':
+        stratum.set_hatch('oo')
       i+=1
+    # Topo
+    topoFinite = self.calc_topoFinite()
     # plotting limits
     all_points = np.vstack(layers)
     plt.xlim(( np.min(all_points[:,0]), np.max(all_points[:,0]) ))
@@ -1047,9 +1052,23 @@ class Terrapin(object):
     #labels = self.layer_lithologies
     #legend = plt.legend(labels, loc=(0.9, .95), labelspacing=0.1)
     #plt.setp(legend.get_texts(), fontsize='small')
-    plt.xlabel('Cross-valley distance [m]', fontsize=16)
-    plt.ylabel('Distance below plateau surface [m]', fontsize=16)
+    plt.plot(topoFinite[:,0], topoFinite[:,1], 'k-', linewidth=3)
+    plt.xlabel('Cross-valley distance [m]', fontsize=16, fontweight='bold')
+    plt.ylabel('Distance below plateau surface [m]', fontsize=16, fontweight='bold')
     plt.gca().invert_yaxis()
+
+  def calc_topoFinite(self):
+    topoFinite = self.topo.copy()
+    topoFinite[:,1] *= -1
+    if np.isinf(topoFinite).any():
+      if len(topoFinite) > 2:
+        xmin = self.topo[1,0]
+      else:
+        xmin = -1E3 # arbitrarily large
+    else:
+      xmin = self.topo[0,0]
+    topoFinite[0,0] = xmin * 1000 # arbitrarily large number
+    return topoFinite
 
   def calc_layer_boundaries(self):
     """
