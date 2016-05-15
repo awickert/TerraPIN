@@ -146,29 +146,40 @@ class Terrapin(object):
       #print layer_top
     #print ""
 
-  def updateFluvialTopo_y(self):
+  def updateFluvialTopo_y(self, constant=5):
     """
     Lateral migration
     """
     pass
-    self.lateralErosionConstant()
+    self.lateralErosionConstant(constant)
     
-  def lateralErosionConstant(self, constant=5):
+  def lateralErosionConstant(self, constant):
     """
     Constant lateral erosion with time 
     """
     # Start with a constant rate with time
     leftmost_at_channel_level = \
-        np.nanmin(self.topo[:,0][self.topo[:,1] == self.z_ch])
+        np.nanmin( self.topo[:,0][np.round(self.topo[:,1], 5) == \
+                                           np.round(self.z_ch, 5)] )
     #valley_middle_point = np.array([0, self.z_ch])
-    old_valley_floor_edge = np.squeeze( \
-                                        self.topo[self.topo[:,0] == \
+    old_valley_floor_edge = np.squeeze( self.topo[self.topo[:,0] ==
                                         leftmost_at_channel_level] )
     point = old_valley_floor_edge - np.array([constant, 0])
     #point = self.topo[-1] - np.array([constant, 0])
     print 'POINT', point
     #self.topo_updates = [valley_middle_point, old_valley_floor_edge, point]
     self.topo_updates = [point]
+    
+    # Figure out which layer needs to have an extra point added for the 
+    # old x-position of the cliff... and add that point
+    from_point = np.array([0, self.z_ch])
+    inLayer = self.insideOrEnteringWhichLayer(point, from_point)
+    inLayer_i = (self.layer_numbers == inLayer).nonzero()[0][0]
+    self.layer_tops[inLayer_i] = \
+          np.vstack(( self.layer_tops[inLayer_i], old_valley_floor_edge ))
+    self.layer_tops[inLayer_i] = self.layer_tops[inLayer_i] \
+                           [self.layer_tops[inLayer_i][:,0].argsort()]
+    
     self.erode(point, old_valley_floor_edge)
     # Ensure that the sediments deposit appropriately, too.
     #alluv_layer_number = self.insideOrEnteringWhichLayer(point)
@@ -536,6 +547,12 @@ class Terrapin(object):
           self.topo_updates.append(chosenIntersection)
           # For lateral erosion:
           # Lateral beveled strath alongside alluvial valley
+          # First time through "while" loop --> first point added to topo.
+          # Update the layers to include a point at the base of the new slope.
+          # Think just first time so it's only done once -- so perhaps move it 
+          # elsewhere?
+          # Yes, up in the channel widening main code.
+          """
           if (ii == 0) and (old_valley_floor_edge is not None):
             iii = (self.layer_numbers == chosen_layer_number).nonzero()[0][0]
             self.layer_tops[iii] = \
@@ -543,6 +560,7 @@ class Terrapin(object):
             self.layer_tops[iii] = self.layer_tops[iii] \
                                    [self.layer_tops[iii][:,0].argsort()]
 
+          """
           # Now note that chosenIntersection is the new starting point
           point = chosenIntersection.copy()
           ii += 1
@@ -1102,6 +1120,7 @@ class Terrapin(object):
         #print layer_top_at_point
         #print layer_top_at_point, point[1], layer_top_at_point > point[1]
         if layer_top_at_point > point[1]:
+          print layer_top_at_point, point
           is_below.append(i)
     is_below = sorted(list(set(is_below))) # rmv sorted for speed?
     #is_below_array = np.in1d(self.layer_numbers, is_below)
