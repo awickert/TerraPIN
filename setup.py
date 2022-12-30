@@ -11,7 +11,7 @@ def read(fname):
 
 setup(
     name = "Terrapin",
-    version = "dev",
+    version = "0.0.0",
     packages = find_packages(exclude="tests"),
     #entry_points = {
     #  'console_scripts': ['terrapin = terrapin:main']
