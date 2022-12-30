@@ -6,6 +6,6 @@ authors:
   orcid: "https://orcid.org/0000-0002-9545-3365"
 title: "TerraPIN: Terraces Put Into Numerics"
 version: 0.0.0
-doi: 
+doi: 10.5281/zenodo.7495451
 date-released: 2016-05-15
 url: "https://github.com/awickert/terrapin"
