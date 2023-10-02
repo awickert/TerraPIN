@@ -2,7 +2,7 @@
 
 import terrapin
 
-reload(terrapin)
+# reload(terrapin)
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -42,12 +42,19 @@ self.topoPlot()
 self.z_ch -= 70
 self.updateFluvialTopo_z()
 
-"""
 self.topoPlot()
-self.z_ch -= 20
+self.updateFluvialTopo_y(15)
+
+self.topoPlot()
+self.z_ch += 50
+self.updateFluvialTopo_z()
+
+self.topoPlot()
+self.z_ch -= 5
 self.updateFluvialTopo_z()
 
 
+"""
 self.topoPlot()
 
 self.z_ch -= 10
