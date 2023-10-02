@@ -166,7 +166,7 @@ class Terrapin(object):
                                         leftmost_at_channel_level] )
     point = old_valley_floor_edge - np.array([constant, 0])
     #point = self.topo[-1] - np.array([constant, 0])
-    print 'POINT', point
+    print( 'POINT', point )
     #self.topo_updates = [valley_middle_point, old_valley_floor_edge, point]
     self.topo_updates = [point]
     
@@ -377,7 +377,7 @@ class Terrapin(object):
       for point in topo:
         topo_at_colluv = self.piecewiseLinearAtX(point[0], colluvial_layer_top)
         if np.round(topo_at_colluv, 5) >= np.round(point[1], 5):
-          print 'pop'
+          print( 'pop' )
           rows_to_delete.append(i)
         i += 1
       topo = np.delete(topo, rows_to_delete, axis=0)
@@ -444,7 +444,7 @@ class Terrapin(object):
       #  break
       #print "&&&&", point, from_point
       point = np.squeeze(point)
-      print point, from_point
+      print( point, from_point )
       inLayer = self.insideOrEnteringWhichLayer(point, from_point)
       from_point = point.copy()
       if inLayer is None:
@@ -718,10 +718,10 @@ class Terrapin(object):
     pass
 
     for i in range(len(self.layer_tops)):
-      print ""
-      print self.layer_tops[i]
-    print ""
-    print "================="
+      print( "" )
+      print( self.layer_tops[i] )
+    print( "" )
+    print( "=================" )
   
   def aggrade(self):
     """
@@ -794,7 +794,7 @@ class Terrapin(object):
     # Remove layers with higher layer numbers
     for n in touching_alluvial_layer_numbers[touching_alluvial_layer_numbers!=
                                      np.min(touching_alluvial_layer_numbers)]:
-      print n
+      print( n )
       lni = int((self.layer_numbers == n).nonzero()[0])
       self.layer_numbers = np.delete(self.layer_numbers, lni)
       self.layer_names.pop(lni)
@@ -1120,7 +1120,7 @@ class Terrapin(object):
         #print layer_top_at_point
         #print layer_top_at_point, point[1], layer_top_at_point > point[1]
         if layer_top_at_point > point[1]:
-          print layer_top_at_point, point
+          print( layer_top_at_point, point )
           is_below.append(i)
     is_below = sorted(list(set(is_below))) # rmv sorted for speed?
     #is_below_array = np.in1d(self.layer_numbers, is_below)
@@ -1404,7 +1404,7 @@ class Terrapin(object):
         if (z_xmin_pwl == z_xmin_pwl[0]).all():
           z_xmin_pwl = z_xmin_pwl[0]
         else:
-          print x, pwl
+          print( x, pwl )
           sys.exit(">1 possible point at x; not a function!")
       z_xmax_pwl = (pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
       if len(z_xmax_pwl) > 1:
@@ -1540,7 +1540,7 @@ class Terrapin(object):
       # Must be above everything, the point is in free space!
       layer_elevation_point_is_inside = None
       layer_number = None
-      print "Warning: POINT ABOVE ALL LAYERS!"
+      print( "Warning: POINT ABOVE ALL LAYERS!" )
     # 2. This should also work if it is the first point.
     #    Check if this is the first point in the series
     elif (layers_at_point_elevation).any() == False:
@@ -1560,7 +1560,7 @@ class Terrapin(object):
         #print from_point
     #elif (point == from_point).all():
     else:
-      print "*****************************"
+      print( "*****************************" )
       # Otherwise the point is on a layer top
       # STEP 1: FIND BOUNDARY LINE GOING THROUGH THIS POINT
       layer_top_numbers_at_point_elevation = self.layer_numbers[layer_tops_at_point_elevation]
@@ -1656,7 +1656,7 @@ class Terrapin(object):
         #         "did not yet prepare for it in the code.\n"+ \
         #         "Better do that now! [mid-layer]")
     
-    print layer_number
+    print( layer_number )
     return layer_number
     
   def unique_rows(self, array):
