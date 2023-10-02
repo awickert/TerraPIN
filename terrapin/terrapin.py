@@ -1484,7 +1484,7 @@ class Terrapin(object):
     Defaults to work on the standard list of layers.
     """
     
-    #print 'point', point
+    print( 'point', point )
 
     layer_tops = self.layer_tops
     self.calc_layer_bottoms()
@@ -1522,6 +1522,12 @@ class Terrapin(object):
     #    We know that this is always inside a layer, so this can help.
     #    In fact, use this as an internal test!
     
+    # Round all
+    layer_top_elevations_at_point = np.round(layer_top_elevations_at_point, 5)
+    layer_bottom_elevations_at_point = np.round(layer_bottom_elevations_at_point, 5)
+    point_raw = point.copy()
+    point = np.round(point, 5)
+
     # 1. Check if point is above all layers
     #    Later move this to the end, for efficiency.
     with np.errstate(invalid='ignore'):
@@ -1606,6 +1612,12 @@ class Terrapin(object):
           R.append(l[isleft][-1,:]) # leftmost right point, flipped
       L = np.array(L)
       R = np.array(R)
+      L = np.round(L, 5)
+      R = np.round(R, 5)
+      print( "LR", L, R)
+      # NEED TO SEE WHY WE SOMETIMES ONLY HAVE L OR R AND HOW TO MAKE
+      # CODE ROBUST AT THIS POINT
+      # !!!!!!!!!!!!!!!!!!!!!!!!!
       # Check if any of these points is the center
       iscenter = np.prod(np.round(L, 5) == np.round(C, 5), axis=1, \
                                                            dtype=bool)
@@ -1614,14 +1626,17 @@ class Terrapin(object):
       Lrad = np.array(Lrad)
       Lrad[Lrad<0] += 2*np.pi
       Lrad[iscenter] = np.nan # Remove from analysis
+      Lrad = np.round(Lrad, 5)
       Rrad = np.arctan2( R[:,1] - C[1], R[:,0] - C[0] )
       Rrad = np.array(Rrad)
       Rrad[Rrad<0] += 2*np.pi
+      Rrad = np.round(Rrad, 5)
       # Where does the line of erosion point
       Erad = np.arctan2( point[1] - from_point[1], point[0] - from_point[0])
       Erad = np.array(Erad)
       if Erad<0:
         Erad += 2*np.pi
+      Erad = np.round(Erad, 5)
       # Zones within units: CCW of L, CW of R
       # Inside the layer even if you're at its top
       # Not sure why -- sort of arbitrary
