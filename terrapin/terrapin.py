@@ -132,7 +132,7 @@ class Terrapin(object):
     self.dz = self.z_ch - self.z_ch_old
     if self.dz > 0:
       if self.z_ch >= 0:
-        sys.exit("Full valley filling not supported")
+        raise NotImplementedError("Full valley filling not supported")
       else:
         self.aggrade()
     elif self.dz < 0:
@@ -140,7 +140,7 @@ class Terrapin(object):
     elif self.dz == 0:
       pass
     else:
-      sys.exit("Warning: dz is not finite")
+      raise ValueError("Warning: dz is not finite")
     #print self.topo
     #for layer_top in self.layer_tops:
       #print layer_top
@@ -246,7 +246,7 @@ class Terrapin(object):
         # (Though possible in lateral migration phase of aggradation)
         diff.append( areas2[self.layer_numbers == n] )
       else:
-        sys.exit()
+        raise RuntimeError("Unexpected layer-number combination")
 
     diff = np.squeeze(np.array(diff))
     return diff
@@ -861,7 +861,7 @@ class Terrapin(object):
       n = self.layer_numbers[np.array(self.layer_names) == layer_name_or_number]
       n = int(n[0])
     else:
-      sys.exit("Integer or string required.")
+      raise TypeError("Integer or string required.")
     self.layer_boundaries= self.calc_layer_boundaries() # refresh
     layers_touching = []
     # NOTE -- WILL HAVE TO UPDATE THIS TO CYCLE THROUGH ALL LAYERS IF I HAVE
@@ -1408,13 +1408,13 @@ class Terrapin(object):
           z_xmin_pwl = z_xmin_pwl[0]
         else:
           print( x, pwl )
-          sys.exit(">1 possible point at x; not a function!")
+          raise ValueError(">1 possible point at x; not a function!")
       z_xmax_pwl = (pwl[:,1][pwl[:,0] == xmax_pwl]) # in case two have it
       if len(z_xmax_pwl) > 1:
         if (z_xmax_pwl == z_xmax_pwl[0]).all():
           z_xmax_pwl = z_xmax_pwl[0]
         else:
-          sys.exit(">1 possible point at x; not a function!")
+          raise ValueError(">1 possible point at x; not a function!")
       if (xmin_pwl == xmax_pwl) or (z_xmin_pwl == z_xmax_pwl):
         # The latter prevents double infinities in z from producing a nan
         # in else
@@ -1561,7 +1561,7 @@ class Terrapin(object):
       layer_number = layer_numbers[layer_top_elevations_at_point \
                                    == layer_elevation_point_is_inside]
       if len(layer_number) > 1:
-        sys.exit('entering too many layers!')
+        raise RuntimeError('entering too many layers!')
       else:
         layer_number = int(layer_number[0])
         #print "HERE HERE HERE"
@@ -1648,7 +1648,7 @@ class Terrapin(object):
          layer_numbers_at_point_elevation[(Erad > Lrad) * (Erad <= Rrad)]
       if len(unit_number_inside) > 1:
         # pass and sort out later on?
-        sys.exit("How are we inside multiple layers?")
+        raise RuntimeError("How are we inside multiple layers?")
       elif len(unit_number_inside) == 0:
         # About to enter free space
         # Follow the surface
