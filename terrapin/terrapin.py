@@ -928,10 +928,13 @@ class Terrapin(object):
       if layerPoints.ndim == 1:
         layerPoints = np.expand_dims(layerPoints, 0)
       for point in layerPoints:
-        try:
-          inlist = np.sum(np.prod(np.asarray(topo) == point, axis=1))
-        except:
-          inlist = np.sum(np.prod(np.asarray(topo) == point, axis=0))
+        if len(topo) == 0:
+          inlist = 0
+        else:
+          try:
+            inlist = np.sum(np.prod(np.asarray(topo) == point, axis=1))
+          except:
+            inlist = np.sum(np.prod(np.asarray(topo) == point, axis=0))
         if inlist:
           pass
         else:
