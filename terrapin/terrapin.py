@@ -175,8 +175,7 @@ class Terrapin(object):
     """
     # Start with a constant rate with time
     leftmost_at_channel_level = \
-        np.nanmin( self.topo[:,0][np.round(self.topo[:,1], 5) == \
-                                           np.round(self.z_ch, 5)] )
+        np.nanmin( self.topo[:,0][_isclose(self.topo[:,1], self.z_ch)] )
     #valley_middle_point = np.array([0, self.z_ch])
     old_valley_floor_edge = np.squeeze( self.topo[self.topo[:,0] ==
                                         leftmost_at_channel_level] )
@@ -480,7 +479,7 @@ class Terrapin(object):
           z_topo = np.array(z_topo)
           # And pick upslope layer, if in doubt.
           inLayer = self.layer_numbers[ \
-                         np.round(z_topo, 5) == np.round(point[1], 5)][0]
+                         _isclose(z_topo, point[1])][0]
       
       elif inLayer == -1:
         # Then, it is entering the outside world; use topography to find a
