@@ -756,7 +756,7 @@ class Terrapin(object):
     #print ""
     #print touching_layers
     #if touching_layers == self.layers_touching.any()
-    layers_touched_logical = np.in1d(self.layer_numbers, touching_layers)
+    layers_touched_logical = np.isin(self.layer_numbers, touching_layers)
     layer_lithologies_touched = np.array(self.layer_lithologies) \
                                                         [layers_touched_logical]
     alluvial_layer_numbers_touched = np.array(touching_layers)[ \
