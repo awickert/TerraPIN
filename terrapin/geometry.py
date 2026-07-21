@@ -80,3 +80,23 @@ def incise(bodies, z_ch, stack):
         eroded[name] = poly.intersection(wedge).area
         new_bodies[name] = poly.difference(wedge)
     return new_bodies, eroded
+
+
+def aggrade(bodies, z_fill, domain, name="alluvium_fill"):
+    """Fill the valley with alluvium up to the level z_fill (a union).
+
+    Sediment drops into whatever open void lies below the fill level, giving a
+    flat aggradation surface at z_fill. bodies is a dict {name: Polygon}; the
+    deposit is added under `name`.
+
+    Returns (new_bodies, deposited) where deposited is the area (volume per
+    unit valley length) laid down. Because the deposit is exactly the slice of
+    void below z_fill, it nests against the existing bodies with no overlap.
+    """
+    minx, miny, maxx, _ = domain.bounds
+    void = domain.difference(unary_union(list(bodies.values())))
+    below = box(minx, miny, maxx, z_fill)
+    fill = void.intersection(below)
+    new_bodies = dict(bodies)
+    new_bodies[name] = fill
+    return new_bodies, fill.area
