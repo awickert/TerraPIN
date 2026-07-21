@@ -100,3 +100,30 @@ def aggrade(bodies, z_fill, domain, name="alluvium_fill"):
     new_bodies = dict(bodies)
     new_bodies[name] = fill
     return new_bodies, fill.area
+
+
+def colluvial_pile(eroded_bedrock_area, toe, alpha_c, lambda_p):
+    """A talus wedge of colluvium standing at its angle of repose.
+
+    Failed bedrock does not vanish -- it piles at the base of the cliff. Loose
+    colluvium takes up more room than the solid rock it came from, by the
+    porosity "fluffing" factor 1 / (1 - lambda_p), so the deposited area is
+
+        A = eroded_bedrock_area / (1 - lambda_p).
+
+    The pile is a triangular talus resting on the valley floor: its toe sits at
+    `toe = (x, z)`, it climbs up-valley against the cliff, and its top surface
+    stands at the colluvium angle of repose alpha_c. (Exact fitting to the cliff
+    face is a later refinement; the invariants here are the fluffed volume and
+    the repose-angle surface.)
+
+    Returns the pile polygon.
+    """
+    A = eroded_bedrock_area / (1.0 - lambda_p)
+    slope = np.tan(np.deg2rad(alpha_c))     # repose surface: rise per run
+    base = np.sqrt(2.0 * A / slope)         # floor length of the talus wedge
+    height = base * slope                   # cliff-side height of the wedge
+    x0, z0 = toe
+    return Polygon([(x0, z0),
+                    (x0 - base, z0),
+                    (x0 - base, z0 + height)])
