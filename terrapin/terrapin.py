@@ -391,7 +391,7 @@ class Terrapin(object):
       rows_to_delete = []
       for point in topo:
         topo_at_colluv = self.piecewiseLinearAtX(point[0], colluvial_layer_top)
-        if np.round(topo_at_colluv, 5) >= np.round(point[1], 5):
+        if topo_at_colluv >= point[1] - TOL:
           print( 'pop' )
           rows_to_delete.append(i)
         i += 1
@@ -496,8 +496,7 @@ class Terrapin(object):
         #point = self.topo[ np.round(self.topo[:,0], 5) == \
         #                       np.round(np.max(x_left), 5) ]
         #continue
-        topo_left = self.topo[ np.round(self.topo[:,0], 6) <= \
-                               np.round(np.max(x_left), 6) ]
+        topo_left = self.topo[ self.topo[:,0] <= np.max(x_left) + TOL ]
         for item in topo_left[::-1]:
           self.topo_updates.append(item)
         break
@@ -792,8 +791,8 @@ class Terrapin(object):
         # Append on two conditions:
         # 1. > all others
         # 2. nan (i.e. no other in this place
-        gt_cond = np.round(point[1], 5) >= np.round( self.piecewiseLinearAtX(point[0], 
-                                                      self.layer_tops[n]), 5)
+        gt_cond = point[1] >= self.piecewiseLinearAtX(point[0],
+                                                      self.layer_tops[n]) - TOL
         nan_cond = np.isnan( self.piecewiseLinearAtX(point[0], 
                                                       self.layer_tops[n]) )
         if gt_cond or nan_cond:
@@ -926,7 +925,7 @@ class Terrapin(object):
         layer_elevations_at_x = np.array(layer_elevations_at_x)
         layer_elevations_at_x = \
               layer_elevations_at_x[np.isnan(layer_elevations_at_x) == False]
-        if (np.round(point[1], 5) >= np.round(np.array(layer_elevations_at_x), 5)).all():
+        if (point[1] >= np.array(layer_elevations_at_x) - TOL).all():
           if (point[0] == 0) and (point[1] >= self.z_ch):
             pass
           else:
@@ -1170,8 +1169,8 @@ class Terrapin(object):
           # completely below.
           # So check that all new points are below.
           #print point, self.piecewiseLinearAtX(point[0], layer_top)
-        if np.round(point[1], 5) < \
-                 np.round(self.piecewiseLinearAtX(point[0], layer_top), 5):
+        if point[1] < \
+                 self.piecewiseLinearAtX(point[0], layer_top) - TOL:
           bottom_points.append(point)
     # For bottom layer
     if len(bottom_points) == 0:
@@ -1359,8 +1358,8 @@ class Terrapin(object):
       xint = (b_pwl - b)/(m - m_pwl)
       # Next, see if the point exists
       # >= and <= to end on the first one it hits
-      if (np.round(xint, 5) >= np.round(xy0[0], 5)) and \
-        (np.round(xint, 5) <= np.round(xy1[0], 5)):
+      if (xint >= xy0[0] - TOL) and \
+        (xint <= xy1[0] + TOL):
         # You're done!
         # y-value plugging into one equations -- let's use the line from the 
         # starting point that is producing the erosion
