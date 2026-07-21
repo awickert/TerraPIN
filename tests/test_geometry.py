@@ -20,7 +20,8 @@ pytest.importorskip("shapely")
 from shapely.geometry import box
 from shapely.ops import unary_union
 
-from terrapin.geometry import repose_wall, eroded_wedge, incise
+from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
+                               colluvial_pile)
 
 # --- A concrete two-material valley: bedrock below -10 m, alluvium above. ---
 TAN75 = np.tan(np.deg2rad(75.0))
@@ -102,3 +103,63 @@ def test_conservation_under_random_incision_sequence():
         bodies, eroded = incise(bodies, z_ch, STACK)
         after = sum(p.area for p in bodies.values())
         assert np.isclose(before - after, sum(eroded.values()), atol=1e-6)
+
+
+# ------------------------------- aggradation -------------------------------
+
+@pytest.mark.parametrize("z_fill,expected", [
+    (-15.0, 0.5 * (5.0 / TAN75) * 5.0),     # fill stays within the bedrock wedge
+    (-10.0, 0.5 * (10.0 / TAN75) * 10.0),   # fill exactly to the bedrock top
+])
+def test_aggrade_fills_wedge_to_analytic(z_fill, expected):
+    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    _, deposited = aggrade(incised, z_fill, DOMAIN)
+    assert np.isclose(deposited, expected)
+
+
+def test_aggrade_surface_is_flat_at_fill_level():
+    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    new, _ = aggrade(incised, -15.0, DOMAIN)
+    assert np.isclose(new["alluvium_fill"].bounds[3], -15.0)   # top of the fill
+
+
+def test_aggrade_deposit_nests_without_overlap():
+    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    new, deposited = aggrade(incised, -12.0, DOMAIN)
+    fill = new["alluvium_fill"]
+    for name in ("bedrock", "alluvium"):
+        assert np.isclose(fill.intersection(new[name]).area, 0.0)
+    # The void shrinks by exactly the deposited volume.
+    void_before = DOMAIN.difference(unary_union([incised["bedrock"],
+                                                 incised["alluvium"]])).area
+    void_after = DOMAIN.difference(unary_union([new["bedrock"], new["alluvium"],
+                                               fill])).area
+    assert np.isclose(void_before - void_after, deposited)
+
+
+# -------------------------------- colluvium --------------------------------
+
+def test_colluvium_volume_is_fluffed_erosion():
+    # A talus holds more than the solid rock it came from, by 1/(1 - lambda_p).
+    eroded = 13.397459621556134     # bedrock eroded by incising to -20 (above)
+    lambda_p = 0.35
+    pile = colluvial_pile(eroded, toe=(0.0, -20.0), alpha_c=20.0, lambda_p=lambda_p)
+    assert np.isclose(pile.area, eroded / (1.0 - lambda_p))
+
+
+def test_colluvium_surface_stands_at_repose_angle():
+    pile = colluvial_pile(50.0, toe=(0.0, -20.0), alpha_c=20.0, lambda_p=0.35)
+    minx, miny, maxx, maxy = pile.bounds
+    width = maxx - minx
+    height = maxy - miny
+    assert np.isclose(height / width, np.tan(np.deg2rad(20.0)))
+
+
+def test_colluvium_scales_and_conserves_from_incision():
+    # End to end: eroded bedrock -> talus of the correct fluffed volume.
+    lambda_p = 0.35
+    _, eroded = incise(fresh_bodies(), -25.0, STACK)
+    pile = colluvial_pile(eroded["bedrock"], toe=(0.0, -25.0),
+                          alpha_c=20.0, lambda_p=lambda_p)
+    assert pile.area > eroded["bedrock"]                       # fluffed up
+    assert np.isclose(pile.area, eroded["bedrock"] / (1.0 - lambda_p))
