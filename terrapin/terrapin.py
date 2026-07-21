@@ -795,7 +795,7 @@ class Terrapin(object):
     for n in touching_alluvial_layer_numbers[touching_alluvial_layer_numbers!=
                                      np.min(touching_alluvial_layer_numbers)]:
       print( n )
-      lni = int((self.layer_numbers == n).nonzero()[0])
+      lni = int((self.layer_numbers == n).nonzero()[0][0])
       self.layer_numbers = np.delete(self.layer_numbers, lni)
       self.layer_names.pop(lni)
       self.layer_lithologies.pop(lni)
@@ -859,7 +859,7 @@ class Terrapin(object):
       n = layer_name_or_number
     elif type(layer_name_or_number) is str:
       n = self.layer_numbers[np.array(self.layer_names) == layer_name_or_number]
-      n = int(n)
+      n = int(n[0])
     else:
       sys.exit("Integer or string required.")
     self.layer_boundaries= self.calc_layer_boundaries() # refresh
@@ -1560,7 +1560,7 @@ class Terrapin(object):
       if len(layer_number) > 1:
         sys.exit('entering too many layers!')
       else:
-        layer_number = int(layer_number)
+        layer_number = int(layer_number[0])
         #print "HERE HERE HERE"
         #print point,
         #print from_point
@@ -1666,7 +1666,7 @@ class Terrapin(object):
       else:
         layer_top_numbers_at_point_elevation = unit_number_inside
         # Define layer_number
-        layer_number = int(layer_top_numbers_at_point_elevation)
+        layer_number = int(layer_top_numbers_at_point_elevation[0])
         #sys.exit("Knew it was possible to have >1 layer at a point but\n"+ \
         #         "did not yet prepare for it in the code.\n"+ \
         #         "Better do that now! [mid-layer]")
