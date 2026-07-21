@@ -9,6 +9,22 @@ import sys
 import fnmatch
 import copy
 
+# Absolute tolerance for floating-point geometry comparisons (meters and
+# radians). Coordinates are bounded and meter-scale and include +/-inf
+# sentinels, so an absolute tolerance is appropriate; a relative one would
+# degenerate near z = 0. This replaces the earlier np.round(_, 5) idiom, which
+# snapped values to a grid and so produced spurious inequalities for values
+# lying on opposite sides of a rounding boundary.
+TOL = 1e-5
+
+def _isclose(a, b):
+    """Tolerant elementwise equality at absolute tolerance TOL.
+
+    Works for scalars and arrays; +/-inf compares equal to itself and unequal
+    to any finite value.
+    """
+    return np.isclose(a, b, rtol=0, atol=TOL)
+
 class Terrapin(object):
   """
   Terrapin (or TerraPIN) stands for "Terraces put into Numerics". It is a module 
