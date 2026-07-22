@@ -14,8 +14,8 @@ stage as a labelled cross-section:
                     wall sheds a modest talus apron onto the quiet strath (the
                     shed volume is a physics input -- illustrative here)
   5. aggrade        a valley fill buries strath and talus
-  6. re-incise      the river cuts a new inner channel, stranding the fill and
-                    strath (with its talus) as terraces
+  6. re-incise      the river cuts a new inner channel into the fill, leaving a
+                    fill (cut-in-fill) terrace; the strath is buried beneath it
 
 The unit models one valley wall; we mirror it about the channel (x = 0) so the
 figure reads as a full symmetric valley -- which is what "low" means.
@@ -119,8 +119,8 @@ snaps.append((dict(bodies), -6.0, "5. Aggrade fill",
 
 # 6. Re-incise a narrow inner channel -> fill and strath left as terraces
 bodies, _ = incise(bodies, -20.0, REPOSE, floor_half_width=0.0)
-snaps.append((dict(bodies), -20.0, "6. Re-incise (strand terraces)",
-              "river cuts to -20 m; fill + strath left as terraces"))
+snaps.append((dict(bodies), -20.0, "6. Re-incise (fill terrace)",
+              "river cuts to -20 m; fill left as a terrace (strath buried)"))
 
 # --- Figure: 2 rows x 3 cols ---
 fig, axes = plt.subplots(2, 3, figsize=(12.0, 6.2), sharex=True, sharey=True)
@@ -137,7 +137,8 @@ handles.append(plt.Line2D([], [], marker="v", color="#1f6fb2", ls="",
                           markeredgecolor="k", label="channel"))
 fig.legend(handles=handles, loc="lower center", ncol=5, fontsize=9,
            frameon=False, bbox_to_anchor=(0.5, 0.0))
-fig.suptitle("Strath and fill terraces from the low (one-wall) TerraPIN unit",
+fig.suptitle("Strath planation, talus, and fill-terrace formation "
+             "(low one-wall TerraPIN unit)",
              fontsize=13, fontweight="bold", y=0.99)
 fig.tight_layout(rect=(0, 0.08, 1, 0.95))
 
