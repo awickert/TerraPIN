@@ -24,13 +24,19 @@ import numpy as np
 # Make the package importable however this script is launched.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from shapely.geometry import box
+
 import terrapin.geometry as g
 from terrapin.geometry import (eroded_wedge, position_repose_surface,
                                _deposit_below_repose)
 
+REPOSE = {"bedrock": 75.0, "alluvium": 32.0}
+_BEDROCK = {"bedrock": box(-100.0, -60.0, 0.0, 0.0)}
+_LAYERED = {"bedrock": box(-100.0, -60.0, 0.0, -10.0),
+            "alluvium": box(-100.0, -10.0, 0.0, 0.0)}
 WALLS = {
-    "single 75deg":    eroded_wedge(-20.0, [(0.0, 75.0, "b")]),
-    "piecewise 75/32": eroded_wedge(-20.0, [(-10.0, 75.0, "b"), (0.0, 32.0, "a")]),
+    "single 75deg":    eroded_wedge(-20.0, _BEDROCK, REPOSE),
+    "piecewise 75/32": eroded_wedge(-20.0, _LAYERED, REPOSE),
 }
 METHODS = ["brent", "bisect", "secant", "analytic"]
 ALPHA_C = 20.0

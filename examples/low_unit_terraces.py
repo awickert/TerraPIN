@@ -81,7 +81,7 @@ def draw(ax, bodies, z_ch, title, subtitle):
 
 # --- Domain and initial condition: alluvium over bedrock, flat surface at 0 ---
 XMAX, ZMIN, ZMAX = 42.0, -28.0, 5.0
-STACK = [(-8.0, 75.0, "bedrock"), (0.0, 32.0, "alluvium")]
+REPOSE = {"bedrock": 75.0, "alluvium": 32.0, "colluvium": 20.0}
 LAMBDA, ALPHA_C = 0.35, 20.0
 DOMAIN = box(-80.0, -60.0, 0.0, ZMAX)
 
@@ -90,12 +90,13 @@ bodies = {"bedrock": box(-80.0, -60.0, 0.0, -8.0),
 snaps = [(dict(bodies), 0.0, "1. Initial", "alluvium over bedrock")]
 
 # 2. Incise into bedrock -> a repose wall forms
-bodies, _ = incise(bodies, -15.0, STACK, floor_half_width=0.0)
+bodies, _ = incise(bodies, -15.0, REPOSE, floor_half_width=0.0)
 snaps.append((dict(bodies), -15.0, "2. Incise",
               "river cuts to -15 m; wall fails at repose"))
 
 # 3. Widen: the river planes a flat strath and exports all the rock
-bodies, bal = widen(bodies, -15.0, 22.0, STACK)
+pre_widen = dict(bodies)
+bodies, bal = widen(bodies, -15.0, 22.0, REPOSE)
 snaps.append((dict(bodies), -15.0, "3. Widen (plane strath)",
               "flat strath; %.0f m$^2$ bedrock swept to sediment"
               % bal["bedrock_eroded"]))
@@ -103,7 +104,7 @@ snaps.append((dict(bodies), -15.0, "3. Widen (plane strath)",
 # 4. River has narrowed away from the wall; the abandoned wall sheds a talus
 #    apron onto the quiet strath. The shed volume is a physics input (external);
 #    here we place an illustrative amount and let the engine fit the apron.
-void = eroded_wedge(-15.0, STACK, 22.0)
+void = eroded_wedge(-15.0, pre_widen, REPOSE, 22.0)
 talus, _ = colluvial_pile(15.0, void, ALPHA_C, LAMBDA)
 bodies = dict(bodies)
 bodies["colluvium"] = talus
@@ -117,7 +118,7 @@ snaps.append((dict(bodies), -6.0, "5. Aggrade fill",
               "valley fills to -6 m (+%.0f m$^2$ alluvium)" % dep))
 
 # 6. Re-incise a narrow inner channel -> fill and strath left as terraces
-bodies, _ = incise(bodies, -20.0, STACK, floor_half_width=0.0)
+bodies, _ = incise(bodies, -20.0, REPOSE, floor_half_width=0.0)
 snaps.append((dict(bodies), -20.0, "6. Re-incise (strand terraces)",
               "river cuts to -20 m; fill + strath left as terraces"))
 
