@@ -17,60 +17,93 @@ coordinates and so needed scattered rounding to survive. Here the geometric
 decisions are delegated to GEOS, which evaluates them consistently.
 """
 import numpy as np
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, box, LineString, Point
 from shapely.ops import unary_union
 from scipy.optimize import brentq, bisect, newton
 
 
-def repose_wall(z_ch, stack):
+def _lithology(name):
+    """Map a body name to its lithology (which carries the repose angle)."""
+    if "bedrock" in name:
+        return "bedrock"
+    if "colluvium" in name:
+        return "colluvium"
+    return "alluvium"           # 'alluvium', 'alluvium_fill', ... are all alluvium
+
+
+def _material_at(bodies, x, z):
+    """Name of the body occupying (x, z), or None if it is open (air/void)."""
+    p = Point(x, z)
+    for name, geom in bodies.items():
+        if not geom.is_empty and geom.covers(p):
+            return name
+    return None
+
+
+def repose_wall(z_ch, bodies, repose_angles, x0=0.0,
+                _eps=1e-7, _reach=1.0e5, _maxit=500):
     """Vertices of the failure wall rising from the channel bottom.
 
-    Starting at the channel bottom (0, z_ch), the wall climbs up-valley and
-    bends at every layer contact: each layer holds its own angle of repose, so
-    the wall stands steep in strong rock and lies back in loose sediment.
+    Starting at (x0, z_ch), the wall climbs up-valley and bends wherever it
+    crosses into a different MATERIAL -- each lithology holds its own angle of
+    repose, so the wall stands steep in strong rock and lies back in loose
+    sediment. The angle at each point is read from whichever body occupies that
+    point (via Shapely), not from a fixed elevation stack -- so rearranged
+    material (e.g. an aggraded fill) fails at its own single angle.
 
-    stack: layers from the bottom up, each (top_elevation, repose_angle_deg,
-           lithology). The top of the last (uppermost) layer is the ground
-           surface.
+    bodies: dict {name: Polygon}. repose_angles: {lithology: angle_deg}. x0 is
+    the wall base (0 for pure incision; -floor_half_width after widening).
 
-    Returns a list of (x, z) vertices from the channel bottom up to where the
-    wall meets the ground surface. If the channel sits at or above the surface
-    there is nothing to climb, and the single starting vertex is returned.
+    Returns a list of (x, z) vertices from the wall base up to where the wall
+    meets open air (the ground surface). If the start is already in the open,
+    the single starting vertex is returned.
     """
-    x, z = 0.0, float(z_ch)
+    x, z = float(x0), float(z_ch)
     wall = [(x, z)]
-    for z_top, angle, lithology in stack:
-        if z >= z_top:
-            # The channel is already at or above this layer; nothing to climb.
-            continue
-        slope = np.tan(np.deg2rad(angle))   # rise in z per unit horizontal run
-        x -= (z_top - z) / slope            # step up-valley to the contact
-        z = z_top
-        wall.append((float(x), float(z)))
+    for _ in range(_maxit):
+        # Which material does the wall climb into, just up and to the left?
+        name = _material_at(bodies, x - _eps, z + _eps)
+        if name is None:
+            break                                   # into the open -> at surface
+        slope = np.tan(np.deg2rad(repose_angles[_lithology(name)]))
+        ray = LineString([(x, z), (x - _reach, z + slope * _reach)])
+        inter = ray.intersection(bodies[name])
+        if inter.geom_type == "MultiLineString":    # ray leaves and re-enters
+            seg = min(inter.geoms,
+                      key=lambda g: Point(g.coords[0]).distance(Point(x, z)))
+            coords = list(seg.coords)
+        elif inter.geom_type == "LineString" and not inter.is_empty:
+            coords = list(inter.coords)
+        else:
+            break
+        nx, nz = coords[-1]                          # exit of this material
+        if nz <= z + _eps:                           # no upward progress
+            break
+        x, z = float(nx), float(nz)
+        wall.append((x, z))
     return wall
 
 
-def eroded_wedge(z_ch, stack, floor_half_width=0.0):
+def eroded_wedge(z_ch, bodies, repose_angles, floor_half_width=0.0):
     """Polygon of material removed by cutting the notch (z_ch, floor_half_width).
 
     The channel sits at x = 0; a flat strath floor runs from the channel out to
-    the wall base at x = -floor_half_width, whence the repose wall climbs to the
-    ground surface. The notch is closed across the top by the old surface and
-    down the channel axis at x = 0. With floor_half_width = 0 it comes to a point
-    at the channel (pure incision); widening it is exactly this same notch with a
-    larger floor. Returns an empty polygon when nothing is removed.
+    the wall base at x = -floor_half_width, whence the material-following repose
+    wall climbs to the ground surface. The notch is closed across the top at the
+    wall's surface exit and down the channel axis at x = 0. With floor_half_width
+    = 0 it comes to a point at the channel (pure incision); widening it is the
+    same notch with a larger floor. Returns an empty polygon when nothing is
+    removed.
     """
-    wall = repose_wall(z_ch, stack)
+    wall = repose_wall(z_ch, bodies, repose_angles, x0=-floor_half_width)
     if len(wall) < 2:
         return Polygon()
-    z_surface = stack[-1][0]
-    w = floor_half_width
-    wall = [(x - w, z) for x, z in wall]          # wall base retreats to -w
-    floor = [] if w == 0 else [(0.0, z_ch)]       # strath floor from channel to -w
-    return Polygon(floor + wall + [(0.0, z_surface)])
+    z_top = wall[-1][1]                           # where the wall meets the air
+    floor = [] if floor_half_width == 0 else [(0.0, z_ch)]
+    return Polygon(floor + wall + [(0.0, z_top)])
 
 
-def _cut_notch(bodies, z_ch, stack, floor_half_width):
+def _cut_notch(bodies, z_ch, repose_angles, floor_half_width):
     """Cut the notch (z_ch, floor_half_width) out of the bodies.
 
     Returns (new_bodies, eroded, wedge). Because eroded area is measured as the
@@ -78,7 +111,7 @@ def _cut_notch(bodies, z_ch, stack, floor_half_width):
     already exclude any earlier, smaller notch -- removed volume equals the drop
     in body area to floating-point tolerance. Mass is conserved by construction.
     """
-    wedge = eroded_wedge(z_ch, stack, floor_half_width)
+    wedge = eroded_wedge(z_ch, bodies, repose_angles, floor_half_width)
     new_bodies, eroded = {}, {}
     for name, poly in bodies.items():
         eroded[name] = poly.intersection(wedge).area
@@ -86,15 +119,16 @@ def _cut_notch(bodies, z_ch, stack, floor_half_width):
     return new_bodies, eroded, wedge
 
 
-def incise(bodies, z_ch, stack, floor_half_width=0.0):
+def incise(bodies, z_ch, repose_angles, floor_half_width=0.0):
     """Incise the channel to z_ch; return updated bodies and eroded volumes.
 
-    bodies: dict {name: Polygon} of the material bodies to cut. floor_half_width
-    carries any valley the channel has already widened, so incision deepens a
-    flat-floored valley rather than re-cutting a point. Eroded material is swept
-    away by the river (no colluvium); see widen() for the piling case.
+    bodies: dict {name: Polygon} of the material bodies to cut. repose_angles:
+    {lithology: angle_deg}, read per-material from whichever body the wall
+    crosses. floor_half_width carries any valley the channel has already widened,
+    so incision deepens a flat-floored valley rather than re-cutting a point.
+    Eroded material is swept away by the river (no colluvium); see widen().
     """
-    new_bodies, eroded, _ = _cut_notch(bodies, z_ch, stack, floor_half_width)
+    new_bodies, eroded, _ = _cut_notch(bodies, z_ch, repose_angles, floor_half_width)
     return new_bodies, eroded
 
 
@@ -239,7 +273,7 @@ def colluvial_pile(eroded_bedrock_area, void, alpha_c, lambda_p,
     return _deposit_below_repose(offset, void, slope), 0.0
 
 
-def widen(bodies, z_ch, floor_half_width, stack):
+def widen(bodies, z_ch, floor_half_width, repose_angles):
     """Widen the valley to half-width `floor_half_width` by lateral planation.
 
     The river sweeps laterally, bevelling a flat strath at z_ch and carrying ALL
@@ -253,7 +287,7 @@ def widen(bodies, z_ch, floor_half_width, stack):
     Returns (new_bodies, balance) with balance a dict of areas (volume per unit
     valley length): bedrock_eroded, alluvium_eroded, sediment_out.
     """
-    new_bodies, eroded, _ = _cut_notch(bodies, z_ch, stack, floor_half_width)
+    new_bodies, eroded, _ = _cut_notch(bodies, z_ch, repose_angles, floor_half_width)
     bedrock_eroded = sum(v for n, v in eroded.items() if "bedrock" in n)
     alluvium_eroded = sum(v for n, v in eroded.items() if "bedrock" not in n)
     balance = {

@@ -5,7 +5,8 @@ Firm tests for TerraPIN's polygon-algebra geometry (terrapin.geometry).
 These are the seed of the test suite for the Shapely-based rewrite. They pin
 down the invariants the model must satisfy no matter how it is implemented:
 
-  * the angle-of-repose wall bends correctly at every layer contact;
+  * the angle-of-repose wall bends at every MATERIAL contact (angle follows the
+    body it crosses, not a fixed elevation);
   * eroded per-material volumes match analytic triangles/trapezoids;
   * materials never overlap, and solid + void fills the domain (conservation);
   * conservation survives a long random sequence of incisions -- the
@@ -28,8 +29,9 @@ from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
 # --- A concrete two-material valley: bedrock below -10 m, alluvium above. ---
 TAN75 = np.tan(np.deg2rad(75.0))
 TAN32 = np.tan(np.deg2rad(32.0))
-STACK = [(-10.0, 75.0, "bedrock"), (0.0, 32.0, "alluvium")]
+REPOSE = {"bedrock": 75.0, "alluvium": 32.0, "colluvium": 20.0}
 DOMAIN = box(-100.0, -50.0, 0.0, 5.0)
+BEDROCK_ONLY = {"bedrock": box(-100.0, -50.0, 0.0, 0.0)}   # surface at 0
 
 
 def fresh_bodies():
@@ -38,15 +40,15 @@ def fresh_bodies():
 
 
 def test_repose_wall_single_material():
-    # A wall that only climbs bedrock (surface taken as the bedrock top).
-    wall = repose_wall(-20.0, [(-10.0, 75.0, "bedrock")])
+    # A wall that only climbs bedrock (bedrock body's top is the surface, -10).
+    wall = repose_wall(-20.0, {"bedrock": box(-80.0, -60.0, 0.0, -10.0)}, REPOSE)
     assert wall[0] == (0.0, -20.0)
     assert np.isclose(wall[-1][0], -10.0 / TAN75)
     assert np.isclose(wall[-1][1], -10.0)
 
 
 def test_repose_wall_bends_at_contact():
-    wall = repose_wall(-20.0, STACK)
+    wall = repose_wall(-20.0, fresh_bodies(), REPOSE)
     zs = [p[1] for p in wall]
     xs = [p[0] for p in wall]
     assert zs == sorted(zs)                     # climbs monotonically in z
@@ -59,10 +61,23 @@ def test_repose_wall_bends_at_contact():
     assert np.isclose(wall[2][1], 0.0)
 
 
+def test_repose_wall_follows_material_not_elevation():
+    # An all-alluvium fill straddling the old bedrock top must fail at ONE angle
+    # (32 deg), not pick up bedrock's 75 deg below -10. (The panel-6 bug.)
+    bodies = {
+        "bedrock": box(-100.0, -50.0, 0.0, -10.0).difference(box(-30.0, -18.0, 0.0, -10.0)),
+        "alluvium_fill": box(-30.0, -18.0, 0.0, -6.0),
+    }
+    wall = repose_wall(-16.0, bodies, REPOSE)    # re-incise into the fill
+    for (x0, z0), (x1, z1) in zip(wall[:-1], wall[1:]):
+        ang = np.degrees(np.arctan2(z1 - z0, -(x1 - x0)))
+        assert np.isclose(ang, 32.0, atol=0.5)   # single alluvium angle throughout
+
+
 def test_incision_above_surface_removes_nothing():
-    _, eroded = incise(fresh_bodies(), 3.0, STACK)   # channel above ground
+    _, eroded = incise(fresh_bodies(), 3.0, REPOSE)   # channel above ground
     assert np.isclose(sum(eroded.values()), 0.0)
-    assert eroded_wedge(3.0, STACK).is_empty
+    assert eroded_wedge(3.0, fresh_bodies(), REPOSE).is_empty
 
 
 @pytest.mark.parametrize("z_ch,expected_bedrock", [
@@ -72,13 +87,13 @@ def test_incision_above_surface_removes_nothing():
     (-5.0, 0.0),                            # stays within the alluvium
 ])
 def test_eroded_bedrock_matches_analytic(z_ch, expected_bedrock):
-    _, eroded = incise(fresh_bodies(), z_ch, STACK)
+    _, eroded = incise(fresh_bodies(), z_ch, REPOSE)
     assert np.isclose(eroded["bedrock"], expected_bedrock)
 
 
 def test_eroded_alluvium_matches_analytic():
     # Removed alluvium is a trapezoid over the 10 m of alluvium thickness.
-    _, eroded = incise(fresh_bodies(), -20.0, STACK)
+    _, eroded = incise(fresh_bodies(), -20.0, REPOSE)
     width_bottom = 10.0 / TAN75                    # wall x at the contact
     width_top = 10.0 / TAN75 + 10.0 / TAN32        # wall x at the surface
     expected = 0.5 * (width_bottom + width_top) * 10.0
@@ -86,7 +101,7 @@ def test_eroded_alluvium_matches_analytic():
 
 
 def test_no_overlap_and_domain_conservation():
-    new, _ = incise(fresh_bodies(), -20.0, STACK)
+    new, _ = incise(fresh_bodies(), -20.0, REPOSE)
     overlap = new["bedrock"].intersection(new["alluvium"]).area
     assert np.isclose(overlap, 0.0)
     solids = unary_union(list(new.values()))
@@ -102,7 +117,7 @@ def test_conservation_under_random_incision_sequence():
     for _ in range(200):
         z_ch = float(rng.uniform(-45.0, -1.0))
         before = sum(p.area for p in bodies.values())
-        bodies, eroded = incise(bodies, z_ch, STACK)
+        bodies, eroded = incise(bodies, z_ch, REPOSE)
         after = sum(p.area for p in bodies.values())
         assert np.isclose(before - after, sum(eroded.values()), atol=1e-6)
 
@@ -114,19 +129,19 @@ def test_conservation_under_random_incision_sequence():
     (-10.0, 0.5 * (10.0 / TAN75) * 10.0),   # fill exactly to the bedrock top
 ])
 def test_aggrade_fills_wedge_to_analytic(z_fill, expected):
-    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE)
     _, deposited = aggrade(incised, z_fill, DOMAIN)
     assert np.isclose(deposited, expected)
 
 
 def test_aggrade_surface_is_flat_at_fill_level():
-    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE)
     new, _ = aggrade(incised, -15.0, DOMAIN)
     assert np.isclose(new["alluvium_fill"].bounds[3], -15.0)   # top of the fill
 
 
 def test_aggrade_deposit_nests_without_overlap():
-    incised, _ = incise(fresh_bodies(), -20.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE)
     new, deposited = aggrade(incised, -12.0, DOMAIN)
     fill = new["alluvium_fill"]
     for name in ("bedrock", "alluvium"):
@@ -144,9 +159,8 @@ def test_aggrade_deposit_nests_without_overlap():
 # valley wall by positioning its repose surface -- the PLIC / area-conservation
 # problem. Two wall shapes: a single 75-deg segment, and a piecewise 75/32 wall.
 
-STACK_1 = [(0.0, 75.0, "bedrock")]           # incising leaves one straight wall
-VOID_1 = eroded_wedge(-20.0, STACK_1)        # capacity ~53.6
-VOID_2 = eroded_wedge(-20.0, STACK)          # piecewise wall, capacity ~120.2
+VOID_1 = eroded_wedge(-20.0, BEDROCK_ONLY, REPOSE)   # straight wall, cap ~53.6
+VOID_2 = eroded_wedge(-20.0, fresh_bodies(), REPOSE)  # piecewise wall, cap ~120.2
 LAMBDA = 0.35
 METHODS = ["brent", "bisect", "secant", "analytic"]
 
@@ -212,9 +226,8 @@ def test_halfplane_clip_is_robust_across_offsets():
 
 
 def test_colluvium_matches_andy_closed_form():
-    # Oracle: Andy's beta-corrected talus height for a straight wall. A talus
-    # rests on a flat channel floor, which the pointed eroded_wedge lacks (the
-    # channel has no width yet), so we build a floor-bearing void here.
+    # Oracle: Andy's beta-corrected talus height for a straight wall on a flat
+    # channel floor (which the pointed eroded_wedge lacks), built here.
     z_ch, alpha_c, beta = -20.0, 20.0, 75.0
     A = 10.0                                     # deposit area, small -> it fits
     tan_a, tan_b = np.tan(np.deg2rad(alpha_c)), np.tan(np.deg2rad(beta))
@@ -228,8 +241,8 @@ def test_colluvium_matches_andy_closed_form():
 
 
 def test_colluvium_from_incision_end_to_end():
-    _, eroded = incise(fresh_bodies(), -25.0, STACK)
-    void = eroded_wedge(-25.0, STACK)
+    _, eroded = incise(fresh_bodies(), -25.0, REPOSE)
+    void = eroded_wedge(-25.0, fresh_bodies(), REPOSE)
     pile, overflow = colluvial_pile(eroded["bedrock"], void, 20.0, LAMBDA)
     assert pile.area > eroded["bedrock"]                        # fluffed up
     assert np.isclose(pile.area + overflow,
@@ -237,28 +250,28 @@ def test_colluvium_from_incision_end_to_end():
 
 
 # --------------------------------- widening --------------------------------
-# Widening is the same notch cut as incision, but undercut bedrock piles as
-# colluvium on the newly-beveled strath floor (the caller supplies the new
-# half-width; TerraPIN does the geometry and mass balance).
+# Widening is lateral planation: the sweeping river bevels a flat strath and
+# exports ALL eroded material as sediment. It cannot leave talus in its path --
+# that is a separate, river-absent step (colluvial_pile).
 
 def test_incise_floor_half_width_backward_compatible():
     # Default floor_half_width=0 reproduces the old pointed-notch incision.
-    _, e0 = incise(fresh_bodies(), -20.0, STACK)
-    _, e1 = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    _, e0 = incise(fresh_bodies(), -20.0, REPOSE)
+    _, e1 = incise(fresh_bodies(), -20.0, REPOSE, floor_half_width=0.0)
     assert e0 == e1
 
 
 def test_widen_opens_flat_strath_floor():
     # Widening to half-width w adds a flat strath slab of width w x depth.
-    pointed = eroded_wedge(-20.0, STACK, 0.0).area
-    floored = eroded_wedge(-20.0, STACK, 8.0).area
+    pointed = eroded_wedge(-20.0, fresh_bodies(), REPOSE, 0.0).area
+    floored = eroded_wedge(-20.0, fresh_bodies(), REPOSE, 8.0).area
     assert np.isclose(floored - pointed, 8.0 * 20.0)
 
 
 def test_widen_exports_all_eroded_as_sediment():
     # The sweeping river carries everything off: sediment out == total eroded.
-    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
-    _, bal = widen(incised, -20.0, 8.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE, floor_half_width=0.0)
+    _, bal = widen(incised, -20.0, 8.0, REPOSE)
     assert np.isclose(bal["sediment_out"],
                       bal["bedrock_eroded"] + bal["alluvium_eroded"])
     assert bal["bedrock_eroded"] > 0.0 and bal["alluvium_eroded"] > 0.0
@@ -266,8 +279,8 @@ def test_widen_exports_all_eroded_as_sediment():
 
 def test_widen_leaves_no_talus_in_the_swept_zone():
     # The river cannot leave a pile in its own path; the strath is left open.
-    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
-    new, _ = widen(incised, -20.0, 8.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE, floor_half_width=0.0)
+    new, _ = widen(incised, -20.0, 8.0, REPOSE)
     assert "colluvium" not in new
     strath_point = Point(-4.0, -19.9)                      # on the fresh strath
     assert not any(g.contains(strath_point) for g in new.values())
@@ -276,9 +289,9 @@ def test_widen_leaves_no_talus_in_the_swept_zone():
 def test_widen_reports_correct_per_material_volumes():
     # Independent oracle: incise reports eroded volume by body name, so widen's
     # bedrock/alluvium split must match it.
-    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
-    _, eroded_ref = incise(incised, -20.0, STACK, floor_half_width=8.0)
-    _, bal = widen(incised, -20.0, 8.0, STACK)
+    incised, _ = incise(fresh_bodies(), -20.0, REPOSE, floor_half_width=0.0)
+    _, eroded_ref = incise(incised, -20.0, REPOSE, floor_half_width=8.0)
+    _, bal = widen(incised, -20.0, 8.0, REPOSE)
     assert np.isclose(bal["bedrock_eroded"], eroded_ref["bedrock"])
     assert np.isclose(bal["alluvium_eroded"], eroded_ref["alluvium"])
     assert bal["alluvium_eroded"] > 0.0                    # alluvium really removed
