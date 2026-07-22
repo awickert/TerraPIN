@@ -50,36 +50,51 @@ def repose_wall(z_ch, stack):
     return wall
 
 
-def eroded_wedge(z_ch, stack):
-    """Polygon of material removed by incising the channel down to z_ch.
+def eroded_wedge(z_ch, stack, floor_half_width=0.0):
+    """Polygon of material removed by cutting the notch (z_ch, floor_half_width).
 
-    Bounded below-right by the repose wall, across the top by the old ground
-    surface, and closed down the channel axis at x = 0. Returns an empty
-    polygon when the channel is at or above the surface (nothing is removed).
+    The channel sits at x = 0; a flat strath floor runs from the channel out to
+    the wall base at x = -floor_half_width, whence the repose wall climbs to the
+    ground surface. The notch is closed across the top by the old surface and
+    down the channel axis at x = 0. With floor_half_width = 0 it comes to a point
+    at the channel (pure incision); widening it is exactly this same notch with a
+    larger floor. Returns an empty polygon when nothing is removed.
     """
     wall = repose_wall(z_ch, stack)
     if len(wall) < 2:
         return Polygon()
     z_surface = stack[-1][0]
-    return Polygon(wall + [(0.0, z_surface)])
+    w = floor_half_width
+    wall = [(x - w, z) for x, z in wall]          # wall base retreats to -w
+    floor = [] if w == 0 else [(0.0, z_ch)]       # strath floor from channel to -w
+    return Polygon(floor + wall + [(0.0, z_surface)])
 
 
-def incise(bodies, z_ch, stack):
-    """Incise the channel to z_ch; return updated bodies and eroded volumes.
+def _cut_notch(bodies, z_ch, stack, floor_half_width):
+    """Cut the notch (z_ch, floor_half_width) out of the bodies.
 
-    bodies: dict {name: Polygon} of the material bodies to cut.
-
-    Returns (new_bodies, eroded) where new_bodies holds the trimmed polygons
-    and eroded[name] is the area (volume per unit valley length) removed from
-    each body. Because eroded area is measured as the intersection with the
-    same wedge that is differenced away, removed volume and the drop in body
-    area agree to floating-point tolerance -- mass is conserved by construction.
+    Returns (new_bodies, eroded, wedge). Because eroded area is measured as the
+    intersection with the same wedge that is differenced away -- and the bodies
+    already exclude any earlier, smaller notch -- removed volume equals the drop
+    in body area to floating-point tolerance. Mass is conserved by construction.
     """
-    wedge = eroded_wedge(z_ch, stack)
+    wedge = eroded_wedge(z_ch, stack, floor_half_width)
     new_bodies, eroded = {}, {}
     for name, poly in bodies.items():
         eroded[name] = poly.intersection(wedge).area
         new_bodies[name] = poly.difference(wedge)
+    return new_bodies, eroded, wedge
+
+
+def incise(bodies, z_ch, stack, floor_half_width=0.0):
+    """Incise the channel to z_ch; return updated bodies and eroded volumes.
+
+    bodies: dict {name: Polygon} of the material bodies to cut. floor_half_width
+    carries any valley the channel has already widened, so incision deepens a
+    flat-floored valley rather than re-cutting a point. Eroded material is swept
+    away by the river (no colluvium); see widen() for the piling case.
+    """
+    new_bodies, eroded, _ = _cut_notch(bodies, z_ch, stack, floor_half_width)
     return new_bodies, eroded
 
 
