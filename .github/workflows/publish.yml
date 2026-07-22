@@ -1,0 +1,37 @@
+name: publish
+
+# Build the distribution and upload it to PyPI when a GitHub release is
+# published. Uses PyPI Trusted Publishing (OIDC) -- no API token or secret is
+# stored; PyPI must be configured to trust this repository + workflow (see below).
+#
+# One-time PyPI setup (owner only), at
+# https://pypi.org/manage/account/publishing/ -- add a pending publisher:
+#   PyPI project name: terrapin-valley
+#   Owner:             awickert
+#   Repository name:   TerraPIN
+#   Workflow name:     publish.yml
+#   Environment name:  pypi
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/terrapin-valley
+    permissions:
+      id-token: write        # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
