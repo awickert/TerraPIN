@@ -34,6 +34,7 @@ class Terrapin(object):
         self.t = 0.                 # model time
         self.eroded = None          # {name: area}: material removed by the last cut
         self.sediment_out = 0.      # material exported by the last operation [area]
+        self._n_fill = 0            # counter so each aggradation gets its own body
 
     # ----------------------------- configuration -----------------------------
 
@@ -79,10 +80,14 @@ class Terrapin(object):
 
     def aggrade(self, z_fill):
         """
-        Fill the valley with alluvium up to the level z_fill.
+        Fill the valley with alluvium up to the level z_fill. Each aggradation is
+        stored as its own body ('alluvium_fill_N'), so repeated fills accumulate
+        rather than overwrite one another.
         """
+        name = "alluvium_fill_%d" % self._n_fill
         self.bodies, self.deposited = geometry.aggrade(
-            self.bodies, z_fill, self._domain(z_fill))
+            self.bodies, z_fill, self._domain(z_fill), name=name)
+        self._n_fill += 1
         self.z_ch = z_fill
         self.sediment_out = 0.
 
