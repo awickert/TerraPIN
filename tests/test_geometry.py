@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("shapely")
 pytest.importorskip("scipy")
-from shapely.geometry import box, Polygon
+from shapely.geometry import box, Polygon, Point
 from shapely.ops import unary_union
 
 from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
@@ -255,44 +255,30 @@ def test_widen_opens_flat_strath_floor():
     assert np.isclose(floored - pointed, 8.0 * 20.0)
 
 
-def test_widen_stores_colluvium_on_floor_and_conserves():
+def test_widen_exports_all_eroded_as_sediment():
+    # The sweeping river carries everything off: sediment out == total eroded.
     incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
-    new, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
-    # colluvium is fluffed bedrock: stored + overflow == fluffed eroded volume
-    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
-                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
-    assert np.isclose(new["colluvium"].bounds[1], -20.0)   # rests on the strath
+    _, bal = widen(incised, -20.0, 8.0, STACK)
     assert np.isclose(bal["sediment_out"],
-                      bal["colluvium_overflow"] + bal["alluvium_eroded"])
+                      bal["bedrock_eroded"] + bal["alluvium_eroded"])
+    assert bal["bedrock_eroded"] > 0.0 and bal["alluvium_eroded"] > 0.0
+
+
+def test_widen_leaves_no_talus_in_the_swept_zone():
+    # The river cannot leave a pile in its own path; the strath is left open.
+    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    new, _ = widen(incised, -20.0, 8.0, STACK)
+    assert "colluvium" not in new
+    strath_point = Point(-4.0, -19.9)                      # on the fresh strath
+    assert not any(g.contains(strath_point) for g in new.values())
 
 
 def test_widen_reports_correct_per_material_volumes():
     # Independent oracle: incise reports eroded volume by body name, so widen's
-    # bedrock/alluvium split must match it (catches piling alluvium as colluvium).
+    # bedrock/alluvium split must match it.
     incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
     _, eroded_ref = incise(incised, -20.0, STACK, floor_half_width=8.0)
-    _, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
+    _, bal = widen(incised, -20.0, 8.0, STACK)
     assert np.isclose(bal["bedrock_eroded"], eroded_ref["bedrock"])
     assert np.isclose(bal["alluvium_eroded"], eroded_ref["alluvium"])
     assert bal["alluvium_eroded"] > 0.0                    # alluvium really removed
-
-
-def test_widen_alluvium_carried_off_only_bedrock_piles():
-    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
-    _, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
-    assert bal["alluvium_eroded"] > 0.0                    # alluvium was removed
-    # only bedrock contributes to the pile; alluvium goes straight to sediment
-    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
-                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
-
-
-def test_widen_overflow_when_valley_too_tight():
-    # In an all-bedrock valley the fluffed colluvium (x1.54) always exceeds the
-    # notch it came from, so some overflows to sediment.
-    bodies = {"bedrock": box(-100.0, -50.0, 0.0, 0.0)}
-    incised, _ = incise(bodies, -20.0, STACK_1, floor_half_width=0.0)
-    _, bal = widen(incised, -20.0, 8.0, STACK_1, alpha_c=20.0, lambda_p=LAMBDA)
-    assert bal["colluvium_overflow"] > 0.0
-    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
-                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
-    assert np.isclose(bal["sediment_out"], bal["colluvium_overflow"])   # no alluvium
