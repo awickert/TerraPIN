@@ -1,8 +1,4 @@
-from ez_setup import use_setuptools
-use_setuptools()
-
 from setuptools import setup, find_packages
-from setuptools.command.install import install
 
 import os
 
@@ -14,6 +10,7 @@ setup(
     version = "0.0.0",
     packages = find_packages(exclude="tests"),
 
+    python_requires = ">=3.10",
     install_requires = [
         "numpy>=2",         # the geometry engine targets NumPy 2
         "shapely>=2",       # GEOS predicates / polygon algebra
@@ -37,4 +34,5 @@ setup(
     url = "http://csdms.colorado.edu/wiki/Model:Terrapin",
     download_url = "https://github.com/awickert/Terrapin",
     long_description=read('README.md'),
+    long_description_content_type="text/markdown",
 )
