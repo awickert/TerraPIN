@@ -7,7 +7,7 @@ def read(fname):
 
 setup(
     name = "Terrapin",
-    version = "0.0.0",
+    version = "0.1.0",
     packages = find_packages(exclude="tests"),
 
     python_requires = ">=3.10",
