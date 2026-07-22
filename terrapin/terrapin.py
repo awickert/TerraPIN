@@ -35,6 +35,8 @@ class Terrapin(object):
         self.eroded = None          # {name: area}: material removed by the last cut
         self.sediment_out = 0.      # material exported by the last operation [area]
         self._n_fill = 0            # counter so each aggradation gets its own body
+        self.provenance = {}        # {name: {kind, lithology, age}}: deposit + its formation age
+        self.surfaces = []          # [{kind, z, abandoned, on}]: surfaces + their abandonment age
 
     # ----------------------------- configuration -----------------------------
 
@@ -42,9 +44,15 @@ class Terrapin(object):
         """
         Set the material bodies: a dict {name: shapely Polygon}. Each name holds
         its lithology ('bedrock', 'alluvium', 'colluvium'), which selects the
-        angle of repose.
+        angle of repose. The initial bodies are pre-existing, so their formation
+        age is unknown (None); later deposits stamp their own.
         """
         self.bodies = dict(bodies)
+        for name in self.bodies:
+            self._record_deposit(name, kind="initial", age=None)
+        miny = unary_union(list(self.bodies.values())).bounds[1]
+        for z, _x_far, _x_near in geometry.treads_above(self.bodies, miny - 1.):
+            self._record_surface("initial", z, abandoned=None)
 
     def set_channel_elevation(self, z_ch):
         """Set the channel-bed elevation."""
@@ -67,38 +75,59 @@ class Terrapin(object):
 
     # -------------------------- operations (told to it) ----------------------
 
-    def incise(self, z_ch):
+    def incise(self, z_ch, age=None):
         """
         Incise the channel bed to z_ch, carving a flat channel of the current
         width. The eroded material is swept away by the river as sediment.
+
+        Incision is the abandoning event: every surface it strands above the new
+        bed -- the old channel floor, buried-then-re-exposed benches, the valley
+        margin -- is a terrace from now on. The optional `age` (a point, or a
+        (start, end) span if the incision took time) is stamped on each surface
+        newly abandoned by this cut; surfaces already abandoned keep their age.
         """
+        self._abandon_stranded(z_ch, age)
         self.bodies, self.eroded = geometry.incise(
             self.bodies, z_ch, self.repose_angles,
             floor_half_width=self.channel_width / 2.)
         self.z_ch = z_ch
         self.sediment_out = sum(self.eroded.values())
 
-    def aggrade(self, z_fill):
+    def aggrade(self, z_fill, age=None):
         """
         Fill the valley with alluvium up to the level z_fill. Each aggradation is
         stored as its own body ('alluvium_fill_N'), so repeated fills accumulate
         rather than overwrite one another.
+
+        The fill is a deposit, so it carries its formation age: the optional
+        `age` (a point, or a (start, end) span) is recorded as the deposit's
+        formation time. Its top is the live valley floor until a later incision
+        strands it as a fill terrace.
         """
         name = "alluvium_fill_%d" % self._n_fill
         self.bodies, self.deposited = geometry.aggrade(
             self.bodies, z_fill, self._domain(z_fill), name=name)
+        self._record_deposit(name, kind="fill", age=age)
+        self._record_surface("fill", z_fill, abandoned=None)
         self._n_fill += 1
         self.z_ch = z_fill
         self.sediment_out = 0.
 
-    def plane_laterally(self, channel_width):
+    def plane_laterally(self, channel_width, age=None):
         """
         Widen the valley by lateral planation to a new channel width, at the
         current bed elevation. The swept rock is exported as sediment; the river
         cannot leave talus in its own path (see terrapin.geometry.widen).
+
+        Planation both cuts the strath and abandons it: as the river sweeps
+        across and moves on, it leaves the strath behind it. That cutting takes
+        time, so the strath's abandonment is naturally a span -- pass `age` as a
+        (start, end) sweep (a point is also accepted); it is recorded as the
+        strath surface's abandonment age.
         """
         self.bodies, self.balance = geometry.widen(
             self.bodies, self.z_ch, channel_width / 2., self.repose_angles)
+        self._record_surface("strath", self.z_ch, abandoned=age)
         self.channel_width = channel_width
         self.sediment_out = self.balance["sediment_out"]
 
@@ -112,7 +141,87 @@ class Terrapin(object):
         self.valley_width = geometry.valley_width(self.bodies, self.z_ch)
         return self.valley_width
 
+    def terraces(self):
+        """
+        The terraces present now: flat benches of ground stranded above the
+        channel, read from the live geometry (so re-incision that eats into a
+        bench shortens it to what actually survives).
+
+        A terrace's age is the age at which its surface was ABANDONED -- when the
+        river left it behind -- and nothing else. The deposit it is cut on has
+        its own, separate deposition age (`deposit_age`); that belongs to the
+        deposit, not to the terrace, and is carried here only as provenance.
+
+        Returns a list of dicts, valley-floor upward, each with:
+          z            elevation of the tread
+          x_near, x_far  cross-valley edges (near / away from the channel at x=0)
+          width        tread width (per unit valley length)
+          kind         surface origin ('strath', 'fill', 'initial')
+          age          the terrace age: when it was abandoned (point or span)
+          body         name of the deposit the terrace is cut on / capped by
+          deposit_age  that deposit's own deposition age (None if not deposited)
+          lithology    its lithology
+        """
+        out = []
+        for z, x_far, x_near in geometry.treads_above(self.bodies, self.z_ch):
+            xm = 0.5 * (x_far + x_near)
+            body = geometry._material_at(self.bodies, xm, z - self._PROBE)
+            prov = self.provenance.get(body, {})
+            surf = self._surface_at(z)
+            out.append({
+                "z": z,
+                "x_near": x_near,
+                "x_far": x_far,
+                "width": x_near - x_far,
+                "kind": surf["kind"] if surf else "initial",
+                "age": surf["abandoned"] if surf else None,
+                "body": body,
+                "deposit_age": prov.get("age"),
+                "lithology": prov.get("lithology"),
+            })
+        return out
+
     # -------------------------------- helpers --------------------------------
+
+    _PROBE = 1e-4       # vertical nudge to sample the material just under a surface
+
+    def _record_deposit(self, name, kind, age):
+        """Log a body's provenance: its origin and formation age."""
+        self.provenance[name] = {
+            "kind": kind,
+            "lithology": geometry._lithology(name),
+            "age": age,
+        }
+
+    def _record_surface(self, kind, z, abandoned):
+        """Log a surface and the age at which it was abandoned."""
+        self.surfaces.append({"kind": kind, "z": z, "abandoned": abandoned})
+
+    def _surface_at(self, z, _tol=1e-5):
+        """The most recently logged surface at elevation z, or None."""
+        for surf in reversed(self.surfaces):
+            if abs(surf["z"] - z) <= _tol:
+                return surf
+        return None
+
+    def _abandon_stranded(self, z_new, age):
+        """Stamp `age` on every exposed surface this incision strands above z_new.
+
+        Called before the cut, on the pre-incision geometry, so the surfaces are
+        read while still intact. The old channel floor and any bench above the
+        new bed are abandoned now; surfaces already abandoned (or buried, hence
+        not exposed) are left untouched. A stranded surface not yet logged -- the
+        original valley margin -- is recorded here as it becomes a terrace.
+        """
+        for z, x_far, x_near in geometry.treads_above(self.bodies, z_new):
+            surf = self._surface_at(z)
+            if surf is None:                        # a freshly cut floor, now stranded
+                xm = 0.5 * (x_far + x_near)
+                body = geometry._material_at(self.bodies, xm, z - self._PROBE)
+                kind = "strath" if geometry._lithology(body) == "bedrock" else "fill"
+                self._record_surface(kind, z, abandoned=age)
+            elif surf["abandoned"] is None:
+                surf["abandoned"] = age
 
     def _domain(self, z_top):
         """A bounding box that spans the bodies and reaches above z_top."""
