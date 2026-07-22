@@ -113,22 +113,23 @@ class Terrapin(object):
         self.z_ch = z_fill
         self.sediment_out = 0.
 
-    def plane_laterally(self, channel_width, age=None):
+    def plane_laterally(self, channel_width):
         """
         Widen the valley by lateral planation to a new channel width, at the
         current bed elevation. The swept rock is exported as sediment; the river
         cannot leave talus in its own path (see terrapin.geometry.widen).
 
-        Planation CUTS the strath but does not abandon it: the planed floor is
-        the live channel bed, and it stays the bed until a later incision drops
-        below it and strands it. So `age` here is the strath's cutting time --
-        naturally a (start, end) span, since planation takes time (a point is
-        also accepted) -- recorded as `cut`, NOT as the terrace age. The strath's
-        abandonment, which is its terrace age, is stamped later by that incision.
+        Planation cuts the strath but does not abandon it: the planed floor is the
+        live channel bed and stays the bed until a later incision drops below it
+        and strands it. The strath is therefore logged here as a live surface,
+        with no age -- the planation takes time but that duration is not tracked;
+        the strath's age is the instant of its abandonment, stamped by the
+        incision that strands it (as for a fill top). So this operation takes no
+        timing argument.
         """
         self.bodies, self.balance = geometry.widen(
             self.bodies, self.z_ch, channel_width / 2., self.repose_angles)
-        self._record_surface("strath", self.z_ch, abandoned=None, cut=age)
+        self._record_surface("strath", self.z_ch, abandoned=None)
         self.channel_width = channel_width
         self.sediment_out = self.balance["sediment_out"]
 
@@ -149,10 +150,9 @@ class Terrapin(object):
         bench shortens it to what actually survives).
 
         A terrace's age is the age at which its surface was ABANDONED -- when the
-        river left it behind -- and nothing else. The other times reported here
-        belong to what the terrace is cut on, not to the terrace: a fill's
-        deposition age (`deposit_age`) and, for a strath, the age it was cut/planed
-        (`cut`). Neither, on its own, makes a terrace.
+        river left it behind -- and nothing else. A fill's deposition age
+        (`deposit_age`) belongs to the deposit the terrace is cut on, not to the
+        terrace, and is carried here only as provenance.
 
         Returns a list of dicts, valley-floor upward, each with:
           z            elevation of the tread
@@ -162,7 +162,6 @@ class Terrapin(object):
           age          the terrace age: when it was abandoned (point or span)
           body         name of the deposit the terrace is cut on / capped by
           deposit_age  that deposit's own deposition age (None if not deposited)
-          cut          a strath's cutting/planation age (None for a fill terrace)
           lithology    its lithology
         """
         out = []
@@ -180,7 +179,6 @@ class Terrapin(object):
                 "age": surf.get("abandoned"),
                 "body": body,
                 "deposit_age": prov.get("age"),
-                "cut": surf.get("cut"),
                 "lithology": prov.get("lithology"),
             })
         return out
@@ -197,12 +195,11 @@ class Terrapin(object):
             "age": age,
         }
 
-    def _record_surface(self, kind, z, abandoned=None, cut=None):
-        """Log a surface, the age it was abandoned, and (strath only) the age it
-        was cut. Abandonment is the terrace age; cutting is a strath's erosional
-        formation -- a separate time that does not, on its own, make a terrace."""
-        self.surfaces.append({"kind": kind, "z": z,
-                              "abandoned": abandoned, "cut": cut})
+    def _record_surface(self, kind, z, abandoned=None):
+        """Log a surface and the age at which it was abandoned (its terrace age).
+        A surface is created live (abandoned=None) and stamped when an incision
+        strands it."""
+        self.surfaces.append({"kind": kind, "z": z, "abandoned": abandoned})
 
     def _surface_at(self, z, _tol=1e-5):
         """The most recently logged surface at elevation z, or None."""
