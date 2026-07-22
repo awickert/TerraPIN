@@ -228,10 +228,24 @@ class Terrapin(object):
         minx, miny, maxx, maxy = unary_union(list(self.bodies.values())).bounds
         return box(minx, miny, maxx, max(maxy, z_top) + 1.)
 
-    def plot(self, mirror=True):
+    @staticmethod
+    def _fmt_age(age):
+        """A compact string for a terrace age -- a point or a (start, end) span."""
+        if age is None:
+            return "?"
+        if isinstance(age, tuple):
+            return "%g–%g" % age                 # start-end (en dash)
+        return "%g" % age
+
+    def plot(self, mirror=True, show_terraces=True, label_ages=True):
         """
         Draw the cross-section, filling each material and (by default) mirroring
         one wall about the channel to show a full symmetric valley.
+
+        With show_terraces, the stranded benches from terraces() are drawn as
+        bold risers on the section; with label_ages, each is annotated with its
+        age -- the age of abandonment, which is the terrace's age. Pass
+        label_ages=False for the same scene without the annotations.
         """
         fill = {'bedrock': ('#b8926a', '//'), 'alluvium': ('#e6cf7a', '..'),
                 'colluvium': ('#9a8f7d', 'xx')}
@@ -255,6 +269,19 @@ class Terrapin(object):
                 for sign in ((1, -1) if mirror else (1,)):
                     ax.fill(sign * xs, zs, facecolor=facecolor, edgecolor='k',
                             linewidth=0.6, hatch=hatch)
+        if show_terraces:
+            for t in self.terraces():
+                for sign in ((1, -1) if mirror else (1,)):
+                    ax.plot([sign * t['x_far'], sign * t['x_near']],
+                            [t['z'], t['z']], color='#c1272d', lw=2.4,
+                            solid_capstyle='butt', zorder=4)
+                if label_ages:
+                    xm = 0.5 * (t['x_far'] + t['x_near'])   # label the left unit
+                    ax.annotate("%s  t=%s" % (t['kind'], self._fmt_age(t['age'])),
+                                xy=(xm, t['z']), xytext=(0, 4),
+                                textcoords='offset points', ha='center',
+                                va='bottom', fontsize=7.5, color='#7a1116',
+                                zorder=5)
         ax.plot(0, self.z_ch, 'v', color='#1f6fb2', markeredgecolor='k')
         ax.set_xlabel('cross-valley distance [m]')
         ax.set_ylabel('elevation [m]')
