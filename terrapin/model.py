@@ -136,7 +136,10 @@ class Terrapin(object):
             if geom.is_empty:
                 continue
             facecolor, hatch = fill[lithology(name)]
-            parts = geom.geoms if geom.geom_type == 'MultiPolygon' else [geom]
+            if geom.geom_type == 'Polygon':
+                parts = [geom]
+            else:                       # MultiPolygon or GeometryCollection
+                parts = [g for g in geom.geoms if g.geom_type == 'Polygon']
             for p in parts:
                 xs, zs = p.exterior.xy
                 xs = np.asarray(xs)
