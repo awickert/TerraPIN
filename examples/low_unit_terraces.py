@@ -2,12 +2,23 @@
 """
 Worked example: terrace formation with the low (one-wall) TerraPIN unit.
 
-Drives the geometry engine through the classic sequence -- incise, laterally
-plane (widen) leaving a strath and a colluvial pile, aggrade a valley fill, then
-re-incise to strand that fill as a terrace -- and draws each stage as a labelled
-cross-section. The unit models one valley wall; we mirror it about the channel
-(x = 0) so the figure reads as a full symmetric valley, which is exactly what
-"low" means (one wall, mirrored).
+Drives the geometry engine through a physically-ordered sequence and draws each
+stage as a labelled cross-section:
+
+  1. initial        alluvium over bedrock
+  2. incise         river cuts down; wall fails at the angle of repose
+  3. widen          the sweeping river planes a flat strath and carries ALL the
+                    eroded rock off as sediment -- it cannot leave talus in its
+                    own path, so the strath is clean
+  4. shed talus     the river has narrowed away from the wall; the now-abandoned
+                    wall sheds a modest talus apron onto the quiet strath (the
+                    shed volume is a physics input -- illustrative here)
+  5. aggrade        a valley fill buries strath and talus
+  6. re-incise      the river cuts a new inner channel, stranding the fill and
+                    strath (with its talus) as terraces
+
+The unit models one valley wall; we mirror it about the channel (x = 0) so the
+figure reads as a full symmetric valley -- which is what "low" means.
 
 Run in the dedicated environment:
     conda run -n terrapin python examples/low_unit_terraces.py
@@ -23,13 +34,13 @@ from matplotlib.patches import Patch
 from shapely.geometry import box
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from terrapin.geometry import incise, widen, aggrade
+from terrapin.geometry import incise, widen, aggrade, eroded_wedge, colluvial_pile
 
 # --- Material palette (geoscience-flavoured), keyed by lithology ---
 STYLE = {
-    "bedrock":  dict(fc="#b8926a", hatch="//",  label="bedrock"),
-    "alluvium": dict(fc="#e6cf7a", hatch="..",  label="alluvium"),
-    "fill":     dict(fc="#d7a43c", hatch="..",  label="alluvial fill / terrace"),
+    "bedrock":   dict(fc="#b8926a", hatch="//", label="bedrock"),
+    "alluvium":  dict(fc="#e6cf7a", hatch="..", label="alluvium"),
+    "fill":      dict(fc="#d7a43c", hatch="..", label="alluvial fill / terrace"),
     "colluvium": dict(fc="#9a8f7d", hatch="xx", label="colluvium (talus)"),
 }
 
@@ -56,11 +67,11 @@ def draw(ax, bodies, z_ch, title, subtitle):
             for sign in (1, -1):                      # mirror about the channel
                 ax.fill(sign * xs, zs, facecolor=st["fc"], edgecolor="k",
                         linewidth=0.6, hatch=st["hatch"], zorder=1)
-    ax.plot(0, z_ch, marker="v", color="#1f6fb2", ms=10, zorder=3,
+    ax.plot(0, z_ch, marker="v", color="#1f6fb2", ms=9, zorder=3,
             markeredgecolor="k")                      # channel
-    ax.set_title(title, fontsize=11, fontweight="bold", pad=18)
+    ax.set_title(title, fontsize=10.5, fontweight="bold", pad=16)
     ax.text(0.5, 1.02, subtitle, transform=ax.transAxes, ha="center",
-            va="bottom", fontsize=8, color="0.35")    # caption above the panel
+            va="bottom", fontsize=7.8, color="0.35")  # caption above the panel
     ax.set_xlim(-XMAX, XMAX)
     ax.set_ylim(ZMIN, ZMAX)
     ax.set_aspect("equal")
@@ -72,44 +83,52 @@ def draw(ax, bodies, z_ch, title, subtitle):
 XMAX, ZMIN, ZMAX = 42.0, -28.0, 5.0
 STACK = [(-8.0, 75.0, "bedrock"), (0.0, 32.0, "alluvium")]
 LAMBDA, ALPHA_C = 0.35, 20.0
+DOMAIN = box(-80.0, -60.0, 0.0, ZMAX)
 
 bodies = {"bedrock": box(-80.0, -60.0, 0.0, -8.0),
           "alluvium": box(-80.0, -8.0, 0.0, 0.0)}
-
-snaps = [(dict(bodies), 0.0, "1. Initial",
-          "alluvium over bedrock; river at the surface")]
+snaps = [(dict(bodies), 0.0, "1. Initial", "alluvium over bedrock")]
 
 # 2. Incise into bedrock -> a repose wall forms
-bodies, er = incise(bodies, -15.0, STACK, floor_half_width=0.0)
-snaps.append((dict(bodies), -15.0,
-              "2. Incise", "river cuts to -15 m; wall fails at repose"))
+bodies, _ = incise(bodies, -15.0, STACK, floor_half_width=0.0)
+snaps.append((dict(bodies), -15.0, "2. Incise",
+              "river cuts to -15 m; wall fails at repose"))
 
-# 3. Widen (lateral planation) -> strath floor + colluvial pile
-bodies, bal = widen(bodies, -15.0, 22.0, STACK, ALPHA_C, LAMBDA)
+# 3. Widen: the river planes a flat strath and exports all the rock
+bodies, bal = widen(bodies, -15.0, 22.0, STACK)
 snaps.append((dict(bodies), -15.0, "3. Widen (plane strath)",
-              "bedrock %.0f -> talus %.0f m$^2$; %.0f to sediment"
-              % (bal["bedrock_eroded"], bal["colluvium_stored"],
-                 bal["sediment_out"])))
+              "flat strath; %.0f m$^2$ bedrock swept to sediment"
+              % bal["bedrock_eroded"]))
 
-# 4. Aggrade a valley fill
-bodies, dep = aggrade(bodies, -5.0, box(-80.0, -60.0, 0.0, ZMAX),
-                      name="alluvium_fill")
-snaps.append((dict(bodies), -5.0, "4. Aggrade fill",
-              "valley fills to -5 m (+%.0f m$^2$ alluvium)" % dep))
+# 4. River has narrowed away from the wall; the abandoned wall sheds a talus
+#    apron onto the quiet strath. The shed volume is a physics input (external);
+#    here we place an illustrative amount and let the engine fit the apron.
+void = eroded_wedge(-15.0, STACK, 22.0)
+talus, _ = colluvial_pile(15.0, void, ALPHA_C, LAMBDA)
+bodies = dict(bodies)
+bodies["colluvium"] = talus
+snaps.append((dict(bodies), -15.0, "4. Wall sheds talus (river absent)",
+              "abandoned wall sheds a %.0f m$^2$ apron; strath still open"
+              % talus.area))
 
-# 5. Re-incise -> the fill is stranded as a terrace
-bodies, er = incise(bodies, -20.0, STACK, floor_half_width=0.0)
-snaps.append((dict(bodies), -20.0, "5. Re-incise (strand terrace)",
-              "river cuts to -20 m; fill left as a terrace"))
+# 5. Aggrade a valley fill over strath and talus
+bodies, dep = aggrade(bodies, -6.0, DOMAIN, name="alluvium_fill")
+snaps.append((dict(bodies), -6.0, "5. Aggrade fill",
+              "valley fills to -6 m (+%.0f m$^2$ alluvium)" % dep))
 
-# --- Figure ---
-fig, axes = plt.subplots(1, len(snaps), figsize=(3.05 * len(snaps), 3.0),
-                         sharey=True)
-for ax, (bd, zc, title, sub) in zip(axes, snaps):
+# 6. Re-incise a narrow inner channel -> fill and strath left as terraces
+bodies, _ = incise(bodies, -20.0, STACK, floor_half_width=0.0)
+snaps.append((dict(bodies), -20.0, "6. Re-incise (strand terraces)",
+              "river cuts to -20 m; fill + strath left as terraces"))
+
+# --- Figure: 2 rows x 3 cols ---
+fig, axes = plt.subplots(2, 3, figsize=(12.0, 6.2), sharex=True, sharey=True)
+for ax, (bd, zc, title, sub) in zip(axes.ravel(), snaps):
     draw(ax, bd, zc, title, sub)
-axes[0].set_ylabel("elevation [m]", fontsize=10)
+for ax in axes[:, 0]:
+    ax.set_ylabel("elevation [m]", fontsize=10)
 fig.supxlabel("cross-valley distance [m]  (one wall, mirrored about the channel)",
-              fontsize=10, y=0.10)
+              fontsize=10, y=0.06)
 
 handles = [Patch(facecolor=s["fc"], edgecolor="k", hatch=s["hatch"],
                  label=s["label"]) for s in STYLE.values()]
@@ -118,8 +137,8 @@ handles.append(plt.Line2D([], [], marker="v", color="#1f6fb2", ls="",
 fig.legend(handles=handles, loc="lower center", ncol=5, fontsize=9,
            frameon=False, bbox_to_anchor=(0.5, 0.0))
 fig.suptitle("Strath and fill terraces from the low (one-wall) TerraPIN unit",
-             fontsize=13, fontweight="bold", y=1.0)
-fig.tight_layout(rect=(0, 0.12, 1, 0.94))
+             fontsize=13, fontweight="bold", y=0.99)
+fig.tight_layout(rect=(0, 0.08, 1, 0.95))
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "low_unit_terraces.png")
