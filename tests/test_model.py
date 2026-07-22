@@ -59,8 +59,20 @@ def test_aggrade_fills_and_raises_bed():
     tp.incise(-20.0)
     tp.aggrade(-8.0)
     assert tp.z_ch == -8.0
-    assert "alluvium_fill" in tp.bodies
+    assert any("alluvium_fill" in name for name in tp.bodies)
     assert tp.deposited > 0.0
+
+
+def test_repeated_aggradation_accumulates():
+    # Each aggradation is its own body, so successive fills stack up.
+    tp = fresh()
+    tp.set_channel_width(16.0)
+    tp.incise(-20.0)
+    tp.aggrade(-14.0)
+    tp.aggrade(-10.0)
+    fills = [name for name in tp.bodies if "alluvium_fill" in name]
+    assert len(fills) == 2                       # both fills persist, not overwritten
+    assert all(tp.bodies[name].area > 0.0 for name in fills)
 
 
 def test_channel_width_can_be_reset_over_time():
