@@ -24,7 +24,7 @@ from shapely.ops import unary_union
 
 from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
                                colluvial_pile, position_repose_surface, widen,
-                               _deposit_below_repose, _offset_bracket)
+                               valley_width, _deposit_below_repose, _offset_bracket)
 
 # --- A concrete two-material valley: bedrock below -10 m, alluvium above. ---
 TAN75 = np.tan(np.deg2rad(75.0))
@@ -295,3 +295,20 @@ def test_widen_reports_correct_per_material_volumes():
     assert np.isclose(bal["bedrock_eroded"], eroded_ref["bedrock"])
     assert np.isclose(bal["alluvium_eroded"], eroded_ref["alluvium"])
     assert bal["alluvium_eroded"] > 0.0                    # alluvium really removed
+
+
+# -------------------------- valley / channel width -------------------------
+# valley_width is the emergent floor width (distance out to the first thing
+# higher than the floor). A non-migrating incising river carves a channel of a
+# prescribed width b = 2 * floor_half_width; right after, valley_width == b.
+
+@pytest.mark.parametrize("b", [0.0, 12.0, 30.0])
+def test_valley_width_equals_carved_channel_width(b):
+    bodies, _ = incise(fresh_bodies(), -20.0, REPOSE, floor_half_width=b / 2.0)
+    assert np.isclose(valley_width(bodies, -20.0), b, atol=1e-6)
+
+
+def test_valley_width_measures_out_to_the_wall():
+    # Twice the distance from the channel to where the ground rises (the wall).
+    bodies, _ = incise(fresh_bodies(), -18.0, REPOSE, floor_half_width=10.0)
+    assert np.isclose(valley_width(bodies, -18.0), 20.0, atol=1e-6)

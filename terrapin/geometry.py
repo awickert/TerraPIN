@@ -124,8 +124,11 @@ def incise(bodies, z_ch, repose_angles, floor_half_width=0.0):
 
     bodies: dict {name: Polygon} of the material bodies to cut. repose_angles:
     {lithology: angle_deg}, read per-material from whichever body the wall
-    crosses. floor_half_width carries any valley the channel has already widened,
-    so incision deepens a flat-floored valley rather than re-cutting a point.
+    crosses. floor_half_width is the channel half-width: a non-migrating river
+    carves a flat channel of width b = 2 * floor_half_width (default 0, a point),
+    measurable afterward with valley_width(). The caller supplies b (settable over
+    time); it also carries any width the valley has already been given, so
+    incision deepens a flat-floored valley rather than re-cutting a point.
     Eroded material is swept away by the river (no colluvium); see widen().
     """
     new_bodies, eroded, _ = _cut_notch(bodies, z_ch, repose_angles, floor_half_width)
@@ -296,3 +299,25 @@ def widen(bodies, z_ch, floor_half_width, repose_angles):
         "sediment_out": bedrock_eroded + alluvium_eroded,
     }
     return new_bodies, balance
+
+
+def valley_width(bodies, z_floor, x_channel=0.0, _eps=1e-6, _reach=1.0e6):
+    """Width of the valley floor at elevation z_floor.
+
+    The valley floor is the flat ground at (or near) z_floor; its width is the
+    cross-valley distance out to the first thing higher than it -- the wall (or a
+    terrace riser). Measured from the geometry, for the symmetric (vertical-only)
+    unit: twice the distance from the channel to where solid first rises above
+    the floor. This is the emergent width TerraPIN hands to a coupled model.
+
+    An incising, non-migrating river carves a channel of a prescribed width b
+    (the caller's `floor_half_width = b/2`); right after such an incision this
+    returns exactly b. Returns inf if no wall is found within the domain.
+    """
+    solid = unary_union([g for g in bodies.values() if not g.is_empty])
+    z = z_floor + _eps
+    ray = LineString([(x_channel, z), (x_channel - _reach, z)])
+    hit = ray.intersection(solid)
+    if hit.is_empty:
+        return float("inf")
+    return 2.0 * (x_channel - hit.bounds[2])    # bounds[2] = wall edge nearest channel
