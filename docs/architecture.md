@@ -62,24 +62,28 @@ times cleanly apart:
   formation age. This lives in `Terrapin.provenance`,
   `{name: {kind, lithology, age}}`.
 - A **surface** holds the age of its **abandonment** — when the river left it
-  behind. This lives in `Terrapin.surfaces`, `{kind, z, abandoned}`.
+  behind — and, for a strath, the age it was **cut**. This lives in
+  `Terrapin.surfaces`, `{kind, z, abandoned, cut}`.
 
 A **terrace is an abandoned surface**, so **its age is the age of abandonment,
-and nothing else**. The deposit a terrace is cut on keeps its own, separate
-deposition age; that belongs to the deposit, not to the terrace. A fill terrace
-therefore reports *two* distinct times — the fill's deposition and the terrace's
-abandonment — and never conflates them.
+and nothing else**. Every other time reported belongs to what the terrace is cut
+*on*, not to the terrace: a fill's deposition age and a strath's cutting age.
+A fill terrace therefore reports two distinct times — the fill's deposition and
+the terrace's abandonment — and never conflates them.
 
 Which operation writes which age follows the physics:
 
 - `aggrade(z, age)` lays down a deposit and stamps it with its **formation** age.
-- `plane_laterally(w, age)` cuts a strath and, in the same sweep, **abandons** it:
-  as the river planes across and moves on, it leaves the strath behind. That
-  cutting takes time, so a strath's abandonment is naturally a **span**
-  `(start, end)`, not an instant.
-- `incise(z, age)` is the abandoning event for everything it strands above the new
-  bed — an old channel floor, a buried-then-exposed bench, the valley margin —
-  stamping each newly stranded surface with the incision's age.
+- `plane_laterally(w, age)` **cuts** a strath but does *not* abandon it: the planed
+  floor is the live channel bed and stays the bed until a later incision drops
+  below it. So its `age` is the strath's **cutting** time — naturally a
+  `(start, end)` span, since planation takes time — recorded as `cut`, not as an
+  abandonment.
+- `incise(z, age)` is the **abandoning** event for everything it strands above the
+  new bed — the old channel floor (a fill top or a planed strath), a
+  buried-then-exposed bench, the valley margin — stamping each newly stranded
+  surface with the incision's age. This is what turns a strath or a fill top into
+  a terrace, and its age is the terrace age.
 
 The timing is an **input the caller pins**, driver-agnostic like every other
 quantity: each operation takes an optional `age`, either a point or a
@@ -88,7 +92,7 @@ quantity: each operation takes an optional `age`, either a point or a
 `Terrapin.terraces()` then reports the terraces present now. It reads the flat
 benches straight from the **live geometry** (`geometry.treads_above`), so a
 re-incision that eats into a bench shortens what is reported to what actually
-survives — the extent is measured, not remembered. Each bench is joined to its
-**abandonment** age (from the surface log) and to the **formation** age of the
-deposit it is cut on (from provenance), and returned with its elevation, extent,
-kind (`strath` / `fill` / `initial`), and lithology.
+survives — the extent is measured, not remembered. Each bench is returned with
+its **abandonment** age (its terrace age) and, kept separate, the **deposition**
+age of the fill it caps or the **cutting** age of the strath it is planed on,
+plus its elevation, extent, kind (`strath` / `fill` / `initial`), and lithology.

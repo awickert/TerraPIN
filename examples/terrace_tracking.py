@@ -54,12 +54,15 @@ tp.aggrade(-13.0, age=22.0)                    # bury the -18 strath under a fil
 tp.set_channel_width(0.0)
 tp.incise(-26.0, age=33.0)                     # re-incise; strand the fill top
 
-# --- What terraces survive, and with which ages? ---
+# --- What terraces survive, and with which ages? The terrace age is always the
+#     abandonment; the deposit age (a fill) and the cut age (a strath's planation)
+#     belong to what it is cut on, and are shown apart. ---
 print("terraces (channel now at %.0f m):" % tp.z_ch)
 for t in tp.terraces():
-    print("  %-7s at z=%6.1f m  (w=%4.1f m)  terrace age=%-10s  deposit age=%s"
+    print("  %-7s at z=%6.1f m  (w=%4.1f m)  terrace age (abandoned)=%-7s"
+          "  deposit age=%-5s  cut age=%s"
           % (t["kind"], t["z"], t["width"], tp._fmt_age(t["age"]),
-             tp._fmt_age(t["deposit_age"])))
+             tp._fmt_age(t["deposit_age"]), tp._fmt_age(t["cut"])))
 
 # --- The same final state, drawn without and with age labels ---
 here = os.path.dirname(os.path.abspath(__file__))
