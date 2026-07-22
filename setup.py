@@ -6,7 +6,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name = "Terrapin",
+    name = "terrapin-valley",       # PyPI distribution name; import is `terrapin`
     version = "0.1.0",
     packages = find_packages(exclude="tests"),
 
