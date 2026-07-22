@@ -17,11 +17,13 @@ import numpy as np
 import pytest
 
 pytest.importorskip("shapely")
-from shapely.geometry import box
+pytest.importorskip("scipy")
+from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
 
 from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
-                               colluvial_pile)
+                               colluvial_pile, position_repose_surface,
+                               _deposit_below_repose, _offset_bracket)
 
 # --- A concrete two-material valley: bedrock below -10 m, alluvium above. ---
 TAN75 = np.tan(np.deg2rad(75.0))
@@ -138,28 +140,97 @@ def test_aggrade_deposit_nests_without_overlap():
 
 
 # -------------------------------- colluvium --------------------------------
+# The colluvial pile fits a talus of prescribed (fluffed) volume against the
+# valley wall by positioning its repose surface -- the PLIC / area-conservation
+# problem. Two wall shapes: a single 75-deg segment, and a piecewise 75/32 wall.
 
-def test_colluvium_volume_is_fluffed_erosion():
-    # A talus holds more than the solid rock it came from, by 1/(1 - lambda_p).
-    eroded = 13.397459621556134     # bedrock eroded by incising to -20 (above)
-    lambda_p = 0.35
-    pile = colluvial_pile(eroded, toe=(0.0, -20.0), alpha_c=20.0, lambda_p=lambda_p)
-    assert np.isclose(pile.area, eroded / (1.0 - lambda_p))
-
-
-def test_colluvium_surface_stands_at_repose_angle():
-    pile = colluvial_pile(50.0, toe=(0.0, -20.0), alpha_c=20.0, lambda_p=0.35)
-    minx, miny, maxx, maxy = pile.bounds
-    width = maxx - minx
-    height = maxy - miny
-    assert np.isclose(height / width, np.tan(np.deg2rad(20.0)))
+STACK_1 = [(0.0, 75.0, "bedrock")]           # incising leaves one straight wall
+VOID_1 = eroded_wedge(-20.0, STACK_1)        # capacity ~53.6
+VOID_2 = eroded_wedge(-20.0, STACK)          # piecewise wall, capacity ~120.2
+LAMBDA = 0.35
+METHODS = ["brent", "bisect", "secant", "analytic"]
 
 
-def test_colluvium_scales_and_conserves_from_incision():
-    # End to end: eroded bedrock -> talus of the correct fluffed volume.
-    lambda_p = 0.35
+def test_area_below_repose_is_monotonic():
+    slope = np.tan(np.deg2rad(20.0))
+    lo, hi = _offset_bracket(VOID_2, slope)
+    areas = [_deposit_below_repose(c, VOID_2, slope).area
+             for c in np.linspace(lo, hi, 40)]
+    assert np.all(np.diff(areas) >= -1e-9)
+
+
+@pytest.mark.parametrize("void", [VOID_1, VOID_2])
+@pytest.mark.parametrize("method", METHODS)
+def test_colluvium_conserves_volume_all_methods(method, void):
+    eroded = 20.0
+    pile, overflow = colluvial_pile(eroded, void, alpha_c=20.0,
+                                    lambda_p=LAMBDA, method=method)
+    assert np.isclose(overflow, 0.0)
+    assert np.isclose(pile.area, eroded / (1.0 - LAMBDA), atol=1e-8)
+
+
+def test_colluvium_methods_agree():
+    eroded = 25.0
+    areas = [colluvial_pile(eroded, VOID_2, 20.0, LAMBDA, method=m)[0].area
+             for m in METHODS]
+    assert np.allclose(areas, areas[0], atol=1e-8)
+
+
+def test_colluvium_free_surface_at_repose_angle():
+    # The gentlest edge of the deposit is its free (repose) surface.
+    pile, _ = colluvial_pile(20.0, VOID_1, alpha_c=20.0, lambda_p=LAMBDA)
+    xs, zs = pile.exterior.xy
+    slopes = []
+    for i in range(len(xs) - 1):
+        dx, dz = xs[i + 1] - xs[i], zs[i + 1] - zs[i]
+        if abs(dx) > 1e-9 and abs(dz) > 1e-9:
+            slopes.append(abs(dz / dx))
+    assert np.isclose(min(slopes), np.tan(np.deg2rad(20.0)), atol=1e-6)
+
+
+def test_colluvium_overflow_becomes_sediment():
+    # More colluvium than the void can hold: it fills, and the rest overflows
+    # (delivered to the channel as sediment in the coupled setting).
+    cap = VOID_1.area
+    eroded = (cap + 10.0) * (1.0 - LAMBDA)      # fluffed volume exceeds capacity
+    pile, overflow = colluvial_pile(eroded, VOID_1, 20.0, LAMBDA)
+    assert np.isclose(pile.area, cap)
+    assert np.isclose(overflow, 10.0)
+    assert np.isclose(pile.area + overflow, eroded / (1.0 - LAMBDA))
+
+
+def test_halfplane_clip_is_robust_across_offsets():
+    # Regression: the repose half-plane must stay a valid polygon even when the
+    # line dips well below the void, or GEOS raises a TopologyException.
+    z_ch = -20.0
+    void = Polygon([(0, z_ch), (-12.0, z_ch), (-17.359, 0.0), (0.0, 0.0)])
+    slope = np.tan(np.deg2rad(20.0))
+    lo, hi = _offset_bracket(void, slope)
+    for c in np.linspace(lo - 1.0, hi + 1.0, 60):
+        area = _deposit_below_repose(c, void, slope).area
+        assert -1e-9 <= area <= void.area + 1e-9
+
+
+def test_colluvium_matches_andy_closed_form():
+    # Oracle: Andy's beta-corrected talus height for a straight wall. A talus
+    # rests on a flat channel floor, which the pointed eroded_wedge lacks (the
+    # channel has no width yet), so we build a floor-bearing void here.
+    z_ch, alpha_c, beta = -20.0, 20.0, 75.0
+    A = 10.0                                     # deposit area, small -> it fits
+    tan_a, tan_b = np.tan(np.deg2rad(alpha_c)), np.tan(np.deg2rad(beta))
+    height = np.sqrt(2 * A * tan_a / (1 - tan_a / tan_b))
+    base = 2 * A / height
+    w = base + 2.0                               # floor wide enough for the toe
+    x_top = -w - (0 - z_ch) / tan_b              # wall meets the ground surface
+    void = Polygon([(0.0, z_ch), (-w, z_ch), (x_top, 0.0), (0.0, 0.0)])
+    pile, _ = colluvial_pile(A * (1 - LAMBDA), void, alpha_c, LAMBDA)
+    assert np.isclose(pile.bounds[3] - z_ch, height, atol=1e-6)
+
+
+def test_colluvium_from_incision_end_to_end():
     _, eroded = incise(fresh_bodies(), -25.0, STACK)
-    pile = colluvial_pile(eroded["bedrock"], toe=(0.0, -25.0),
-                          alpha_c=20.0, lambda_p=lambda_p)
-    assert pile.area > eroded["bedrock"]                       # fluffed up
-    assert np.isclose(pile.area, eroded["bedrock"] / (1.0 - lambda_p))
+    void = eroded_wedge(-25.0, STACK)
+    pile, overflow = colluvial_pile(eroded["bedrock"], void, 20.0, LAMBDA)
+    assert pile.area > eroded["bedrock"]                        # fluffed up
+    assert np.isclose(pile.area + overflow,
+                      eroded["bedrock"] / (1.0 - LAMBDA))
