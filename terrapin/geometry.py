@@ -237,3 +237,37 @@ def colluvial_pile(eroded_bedrock_area, void, alpha_c, lambda_p,
     offset = position_repose_surface(A, void, alpha_c, method, first_guess)
     slope = np.tan(np.deg2rad(alpha_c))
     return _deposit_below_repose(offset, void, slope), 0.0
+
+
+def widen(bodies, z_ch, floor_half_width, stack, alpha_c, lambda_p,
+          colluvium_name="colluvium", method="brent"):
+    """Widen the valley to half-width `floor_half_width` (the wall has retreated
+    to x = -floor_half_width -- told by the caller, not decided here).
+
+    The channel bevels a flat strath at z_ch as it planes into the wall. Undercut
+    BEDROCK piles as colluvium on the new strath floor, with any excess carried
+    off as sediment; eroded ALLUVIUM is carried off entirely (the river reworks
+    it). This is the same notch cut as incision, differing only in disposition.
+
+    Returns (new_bodies, balance) with the colluvium added under `colluvium_name`
+    and balance a dict of areas (volume per unit valley length):
+      bedrock_eroded, alluvium_eroded, colluvium_stored, colluvium_overflow,
+      sediment_out.
+    """
+    new_bodies, eroded, wedge = _cut_notch(bodies, z_ch, stack, floor_half_width)
+    bedrock_eroded = sum(v for n, v in eroded.items() if "bedrock" in n)
+    alluvium_eroded = sum(v for n, v in eroded.items() if "bedrock" not in n)
+
+    pile, overflow = colluvial_pile(bedrock_eroded, wedge, alpha_c, lambda_p,
+                                    method=method)
+    new_bodies = dict(new_bodies)
+    new_bodies[colluvium_name] = pile
+
+    balance = {
+        "bedrock_eroded": bedrock_eroded,
+        "alluvium_eroded": alluvium_eroded,
+        "colluvium_stored": pile.area,
+        "colluvium_overflow": overflow,
+        "sediment_out": overflow + alluvium_eroded,
+    }
+    return new_bodies, balance
