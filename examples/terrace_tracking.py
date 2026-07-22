@@ -44,25 +44,26 @@ tp.set_bodies({"bedrock": box(-140.0, -80.0, 0.0, -6.0),
 tp.set_repose_angles(REPOSE)
 tp.set_channel_elevation(0.0)
 
-# --- A valley history, each step pinned in time by the caller ---
+# --- A valley history. Incision and aggradation are pinned in time by the caller;
+#     planation carries no time, since a strath's age is the instant it is later
+#     abandoned, not the (untracked) duration of its cutting. ---
 tp.incise(-8.0, age=5.0)                      # cut down; strand the land surface
-tp.plane_laterally(95.0, age=(5.0, 8.0))      # plane a high, wide strath at -8 m
+tp.plane_laterally(95.0)                       # plane a high, wide strath at -8 m
 tp.set_channel_width(0.0)
 tp.incise(-18.0, age=12.0)                     # re-incise; strand the -8 strath
-tp.plane_laterally(40.0, age=(12.0, 15.0))    # plane a lower strath at -18 m
+tp.plane_laterally(40.0)                        # plane a lower strath at -18 m
 tp.aggrade(-13.0, age=22.0)                    # bury the -18 strath under a fill
 tp.set_channel_width(0.0)
 tp.incise(-26.0, age=33.0)                     # re-incise; strand the fill top
 
 # --- What terraces survive, and with which ages? The terrace age is always the
-#     abandonment; the deposit age (a fill) and the cut age (a strath's planation)
-#     belong to what it is cut on, and are shown apart. ---
+#     abandonment; a fill's deposition age belongs to the deposit, shown apart. ---
 print("terraces (channel now at %.0f m):" % tp.z_ch)
 for t in tp.terraces():
     print("  %-7s at z=%6.1f m  (w=%4.1f m)  terrace age (abandoned)=%-7s"
-          "  deposit age=%-5s  cut age=%s"
+          "  deposit age=%s"
           % (t["kind"], t["z"], t["width"], tp._fmt_age(t["age"]),
-             tp._fmt_age(t["deposit_age"]), tp._fmt_age(t["cut"])))
+             tp._fmt_age(t["deposit_age"])))
 
 # --- The same final state, drawn without and with age labels ---
 here = os.path.dirname(os.path.abspath(__file__))

@@ -47,7 +47,7 @@ tp.set_repose_angles({"bedrock": 75.0, "alluvium": 32.0, "colluvium": 20.0})
 tp.set_channel_elevation(0.0)
 
 tp.incise(-8.0, age=5.0)                     # cut down; strand the land surface
-tp.plane_laterally(95.0, age=(5.0, 8.0))     # plane a strath (the sweep is its cut age)
+tp.plane_laterally(95.0)                      # plane a strath (its age is set when abandoned)
 tp.set_channel_width(0.0)
 tp.aggrade(-3.0, age=22.0)                    # a valley fill
 tp.incise(-20.0, age=33.0)                    # re-incise; strand the fill top
