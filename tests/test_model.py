@@ -128,14 +128,17 @@ def test_aggrade_records_deposit_formation_age():
     assert tp._surface_at(-12.0)["abandoned"] is None
 
 
-def test_plane_laterally_records_strath_abandonment_span():
-    # Planation both cuts the strath and abandons it, over the sweep's duration.
+def test_plane_laterally_records_strath_cut_not_abandonment():
+    # Planation CUTS the strath but does not abandon it: the planed floor is the
+    # live channel bed. So the sweep's span is recorded as `cut`, and the strath
+    # is not yet abandoned (that waits for a later incision).
     tp = fresh()
     tp.incise(-20.0, age=1.0)
     tp.plane_laterally(30.0, age=(1.0, 3.0))
     strath = tp._surface_at(-20.0)
     assert strath["kind"] == "strath"
-    assert strath["abandoned"] == (1.0, 3.0)
+    assert strath["cut"] == (1.0, 3.0)
+    assert strath["abandoned"] is None
 
 
 def test_incise_abandons_the_surface_it_strands():
@@ -170,8 +173,9 @@ def test_fill_terrace_age_is_abandonment_not_deposition():
 
 
 def test_buried_strath_is_not_reported_as_a_terrace():
-    # The strath is buried by the fill, so it is not an exposed bench -- yet its
-    # record still carries the planation-sweep abandonment for if it re-emerges.
+    # The strath is buried by the fill before any incision strands it, so it is
+    # never abandoned and never a terrace -- it keeps its cut age (for if it were
+    # to re-emerge) but no abandonment age.
     tp = fresh()
     tp.incise(-15.0, age=10.0)
     tp.plane_laterally(44.0, age=(10.0, 14.0))
@@ -179,12 +183,15 @@ def test_buried_strath_is_not_reported_as_a_terrace():
     tp.set_channel_width(0.0)
     tp.incise(-20.0, age=30.0)
     assert not any(np.isclose(t["z"], -15.0) for t in tp.terraces())
-    assert tp._surface_at(-15.0)["abandoned"] == (10.0, 14.0)
+    buried = tp._surface_at(-15.0)
+    assert buried["cut"] == (10.0, 14.0)
+    assert buried["abandoned"] is None
 
 
-def test_exposed_strath_terrace_carries_its_planation_span():
-    # With no fill to bury it, incising below the strath strands it as a terrace
-    # whose abandonment is the planation sweep, not the later incision.
+def test_strath_terrace_age_is_abandonment_not_cutting():
+    # The strath is planed at (10, 14) but stays the live bed until the river
+    # incises below it at t=30. Its terrace age is that abandonment -- NOT the
+    # planation. The planation span is reported separately as `cut`.
     tp = fresh()
     tp.incise(-15.0, age=10.0)
     tp.plane_laterally(44.0, age=(10.0, 14.0))
@@ -194,7 +201,8 @@ def test_exposed_strath_terrace_carries_its_planation_span():
     assert len(straths) == 1
     t = straths[0]
     assert np.isclose(t["z"], -15.0)
-    assert t["age"] == (10.0, 14.0)                # the sweep, not the incision
+    assert t["age"] == 30.0                        # abandonment (the incision)
+    assert t["cut"] == (10.0, 14.0)                # the planation, reported apart
     assert t["deposit_age"] is None                # erosional: no deposit beneath
     assert t["lithology"] == "bedrock"             # a strath is cut into rock
 

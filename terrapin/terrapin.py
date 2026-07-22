@@ -119,15 +119,16 @@ class Terrapin(object):
         current bed elevation. The swept rock is exported as sediment; the river
         cannot leave talus in its own path (see terrapin.geometry.widen).
 
-        Planation both cuts the strath and abandons it: as the river sweeps
-        across and moves on, it leaves the strath behind it. That cutting takes
-        time, so the strath's abandonment is naturally a span -- pass `age` as a
-        (start, end) sweep (a point is also accepted); it is recorded as the
-        strath surface's abandonment age.
+        Planation CUTS the strath but does not abandon it: the planed floor is
+        the live channel bed, and it stays the bed until a later incision drops
+        below it and strands it. So `age` here is the strath's cutting time --
+        naturally a (start, end) span, since planation takes time (a point is
+        also accepted) -- recorded as `cut`, NOT as the terrace age. The strath's
+        abandonment, which is its terrace age, is stamped later by that incision.
         """
         self.bodies, self.balance = geometry.widen(
             self.bodies, self.z_ch, channel_width / 2., self.repose_angles)
-        self._record_surface("strath", self.z_ch, abandoned=age)
+        self._record_surface("strath", self.z_ch, abandoned=None, cut=age)
         self.channel_width = channel_width
         self.sediment_out = self.balance["sediment_out"]
 
@@ -148,9 +149,10 @@ class Terrapin(object):
         bench shortens it to what actually survives).
 
         A terrace's age is the age at which its surface was ABANDONED -- when the
-        river left it behind -- and nothing else. The deposit it is cut on has
-        its own, separate deposition age (`deposit_age`); that belongs to the
-        deposit, not to the terrace, and is carried here only as provenance.
+        river left it behind -- and nothing else. The other times reported here
+        belong to what the terrace is cut on, not to the terrace: a fill's
+        deposition age (`deposit_age`) and, for a strath, the age it was cut/planed
+        (`cut`). Neither, on its own, makes a terrace.
 
         Returns a list of dicts, valley-floor upward, each with:
           z            elevation of the tread
@@ -160,6 +162,7 @@ class Terrapin(object):
           age          the terrace age: when it was abandoned (point or span)
           body         name of the deposit the terrace is cut on / capped by
           deposit_age  that deposit's own deposition age (None if not deposited)
+          cut          a strath's cutting/planation age (None for a fill terrace)
           lithology    its lithology
         """
         out = []
@@ -167,16 +170,17 @@ class Terrapin(object):
             xm = 0.5 * (x_far + x_near)
             body = geometry._material_at(self.bodies, xm, z - self._PROBE)
             prov = self.provenance.get(body, {})
-            surf = self._surface_at(z)
+            surf = self._surface_at(z) or {}
             out.append({
                 "z": z,
                 "x_near": x_near,
                 "x_far": x_far,
                 "width": x_near - x_far,
-                "kind": surf["kind"] if surf else "initial",
-                "age": surf["abandoned"] if surf else None,
+                "kind": surf.get("kind", "initial"),
+                "age": surf.get("abandoned"),
                 "body": body,
                 "deposit_age": prov.get("age"),
+                "cut": surf.get("cut"),
                 "lithology": prov.get("lithology"),
             })
         return out
@@ -193,9 +197,12 @@ class Terrapin(object):
             "age": age,
         }
 
-    def _record_surface(self, kind, z, abandoned):
-        """Log a surface and the age at which it was abandoned."""
-        self.surfaces.append({"kind": kind, "z": z, "abandoned": abandoned})
+    def _record_surface(self, kind, z, abandoned=None, cut=None):
+        """Log a surface, the age it was abandoned, and (strath only) the age it
+        was cut. Abandonment is the terrace age; cutting is a strath's erosional
+        formation -- a separate time that does not, on its own, make a terrace."""
+        self.surfaces.append({"kind": kind, "z": z,
+                              "abandoned": abandoned, "cut": cut})
 
     def _surface_at(self, z, _tol=1e-5):
         """The most recently logged surface at elevation z, or None."""
