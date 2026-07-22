@@ -22,7 +22,7 @@ from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
 
 from terrapin.geometry import (repose_wall, eroded_wedge, incise, aggrade,
-                               colluvial_pile, position_repose_surface,
+                               colluvial_pile, position_repose_surface, widen,
                                _deposit_below_repose, _offset_bracket)
 
 # --- A concrete two-material valley: bedrock below -10 m, alluvium above. ---
@@ -234,3 +234,65 @@ def test_colluvium_from_incision_end_to_end():
     assert pile.area > eroded["bedrock"]                        # fluffed up
     assert np.isclose(pile.area + overflow,
                       eroded["bedrock"] / (1.0 - LAMBDA))
+
+
+# --------------------------------- widening --------------------------------
+# Widening is the same notch cut as incision, but undercut bedrock piles as
+# colluvium on the newly-beveled strath floor (the caller supplies the new
+# half-width; TerraPIN does the geometry and mass balance).
+
+def test_incise_floor_half_width_backward_compatible():
+    # Default floor_half_width=0 reproduces the old pointed-notch incision.
+    _, e0 = incise(fresh_bodies(), -20.0, STACK)
+    _, e1 = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    assert e0 == e1
+
+
+def test_widen_opens_flat_strath_floor():
+    # Widening to half-width w adds a flat strath slab of width w x depth.
+    pointed = eroded_wedge(-20.0, STACK, 0.0).area
+    floored = eroded_wedge(-20.0, STACK, 8.0).area
+    assert np.isclose(floored - pointed, 8.0 * 20.0)
+
+
+def test_widen_stores_colluvium_on_floor_and_conserves():
+    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    new, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
+    # colluvium is fluffed bedrock: stored + overflow == fluffed eroded volume
+    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
+                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
+    assert np.isclose(new["colluvium"].bounds[1], -20.0)   # rests on the strath
+    assert np.isclose(bal["sediment_out"],
+                      bal["colluvium_overflow"] + bal["alluvium_eroded"])
+
+
+def test_widen_reports_correct_per_material_volumes():
+    # Independent oracle: incise reports eroded volume by body name, so widen's
+    # bedrock/alluvium split must match it (catches piling alluvium as colluvium).
+    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    _, eroded_ref = incise(incised, -20.0, STACK, floor_half_width=8.0)
+    _, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
+    assert np.isclose(bal["bedrock_eroded"], eroded_ref["bedrock"])
+    assert np.isclose(bal["alluvium_eroded"], eroded_ref["alluvium"])
+    assert bal["alluvium_eroded"] > 0.0                    # alluvium really removed
+
+
+def test_widen_alluvium_carried_off_only_bedrock_piles():
+    incised, _ = incise(fresh_bodies(), -20.0, STACK, floor_half_width=0.0)
+    _, bal = widen(incised, -20.0, 8.0, STACK, alpha_c=20.0, lambda_p=LAMBDA)
+    assert bal["alluvium_eroded"] > 0.0                    # alluvium was removed
+    # only bedrock contributes to the pile; alluvium goes straight to sediment
+    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
+                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
+
+
+def test_widen_overflow_when_valley_too_tight():
+    # In an all-bedrock valley the fluffed colluvium (x1.54) always exceeds the
+    # notch it came from, so some overflows to sediment.
+    bodies = {"bedrock": box(-100.0, -50.0, 0.0, 0.0)}
+    incised, _ = incise(bodies, -20.0, STACK_1, floor_half_width=0.0)
+    _, bal = widen(incised, -20.0, 8.0, STACK_1, alpha_c=20.0, lambda_p=LAMBDA)
+    assert bal["colluvium_overflow"] > 0.0
+    assert np.isclose(bal["colluvium_stored"] + bal["colluvium_overflow"],
+                      bal["bedrock_eroded"] / (1.0 - LAMBDA))
+    assert np.isclose(bal["sediment_out"], bal["colluvium_overflow"])   # no alluvium
