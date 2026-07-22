@@ -51,3 +51,44 @@ TerraPIN's two configurations differ only in **lateral channel dynamics**:
 Persistent, dynamic talus is therefore intrinsically a **standard-model**
 phenomenon; the colluvial-pile machinery is built and validated but does little
 physical work until the mobile channel exists.
+
+## Terrace and provenance tracking
+
+TerraPIN records enough history to read its terraces back out, and it keeps two
+times cleanly apart:
+
+- A **deposit** (a material body) holds the age of its **formation**. A fill
+  carries the age at which it aggraded; pre-existing bodies have no known
+  formation age. This lives in `Terrapin.provenance`,
+  `{name: {kind, lithology, age}}`.
+- A **surface** holds the age of its **abandonment** — when the river left it
+  behind. This lives in `Terrapin.surfaces`, `{kind, z, abandoned}`.
+
+A **terrace is an abandoned surface**, so **its age is the age of abandonment,
+and nothing else**. The deposit a terrace is cut on keeps its own, separate
+deposition age; that belongs to the deposit, not to the terrace. A fill terrace
+therefore reports *two* distinct times — the fill's deposition and the terrace's
+abandonment — and never conflates them.
+
+Which operation writes which age follows the physics:
+
+- `aggrade(z, age)` lays down a deposit and stamps it with its **formation** age.
+- `plane_laterally(w, age)` cuts a strath and, in the same sweep, **abandons** it:
+  as the river planes across and moves on, it leaves the strath behind. That
+  cutting takes time, so a strath's abandonment is naturally a **span**
+  `(start, end)`, not an instant.
+- `incise(z, age)` is the abandoning event for everything it strands above the new
+  bed — an old channel floor, a buried-then-exposed bench, the valley margin —
+  stamping each newly stranded surface with the incision's age.
+
+The timing is an **input the caller pins**, driver-agnostic like every other
+quantity: each operation takes an optional `age`, either a point or a
+`(start, end)` span for a process that acts over a duration.
+
+`Terrapin.terraces()` then reports the terraces present now. It reads the flat
+benches straight from the **live geometry** (`geometry.treads_above`), so a
+re-incision that eats into a bench shortens what is reported to what actually
+survives — the extent is measured, not remembered. Each bench is joined to its
+**abandonment** age (from the surface log) and to the **formation** age of the
+deposit it is cut on (from provenance), and returned with its elevation, extent,
+kind (`strath` / `fill` / `initial`), and lithology.
