@@ -321,3 +321,35 @@ def valley_width(bodies, z_floor, x_channel=0.0, _eps=1e-6, _reach=1.0e6):
     if hit.is_empty:
         return float("inf")
     return 2.0 * (x_channel - hit.bounds[2])    # bounds[2] = wall edge nearest channel
+
+
+def treads_above(bodies, z_floor, _tol=1e-6, _probe=1e-4):
+    """Flat top-of-ground treads stranded above z_floor.
+
+    Walks the upper boundary of the solid and returns every horizontal segment
+    that lies above z_floor -- the abandoned surfaces a terrace tracker reads:
+    stranded strath and fill tops, and the original valley-margin surface. Each
+    is a bench of exposed ground (solid just beneath it, open air just above),
+    so re-incision that eats into a tread shortens what is reported to what
+    actually survives. The current channel floor (at z_floor) is excluded.
+
+    Returns a list of (z, x_far, x_near) sorted by elevation, where x_near is the
+    edge nearer the channel (x = 0) and x_far the edge away from it.
+    """
+    solid = unary_union([g for g in bodies.values() if not g.is_empty])
+    polys = solid.geoms if solid.geom_type == "MultiPolygon" else [solid]
+    out = []
+    for p in polys:
+        coords = list(p.exterior.coords)
+        for (x0, z0), (x1, z1) in zip(coords[:-1], coords[1:]):
+            if abs(z1 - z0) > _tol:                 # not horizontal
+                continue
+            z = 0.5 * (z0 + z1)
+            if z <= z_floor + _tol:                 # not above the channel floor
+                continue
+            xm = 0.5 * (x0 + x1)
+            below = solid.covers(Point(xm, z - _probe))
+            above = solid.covers(Point(xm, z + _probe))
+            if below and not above:                 # a true top surface (a bench)
+                out.append((z, min(x0, x1), max(x0, x1)))
+    return sorted(out)
