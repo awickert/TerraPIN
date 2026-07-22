@@ -13,6 +13,13 @@ setup(
     name = "Terrapin",
     version = "0.0.0",
     packages = find_packages(exclude="tests"),
+
+    install_requires = [
+        "numpy>=2",         # the geometry engine targets NumPy 2
+        "shapely>=2",       # GEOS predicates / polygon algebra
+        "scipy",            # root-finders for the colluvial-pile solver
+        "matplotlib",       # cross-section plotting
+    ],
     #entry_points = {
     #  'console_scripts': ['terrapin = terrapin:main']
     #  },
