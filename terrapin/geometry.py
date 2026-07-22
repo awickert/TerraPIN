@@ -19,6 +19,7 @@ decisions are delegated to GEOS, which evaluates them consistently.
 import numpy as np
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
+from scipy.optimize import brentq, bisect, newton
 
 
 def repose_wall(z_ch, stack):
@@ -102,28 +103,122 @@ def aggrade(bodies, z_fill, domain, name="alluvium_fill"):
     return new_bodies, fill.area
 
 
-def colluvial_pile(eroded_bedrock_area, toe, alpha_c, lambda_p):
-    """A talus wedge of colluvium standing at its angle of repose.
+# --- Colluvial pile: fit a talus of prescribed volume against the valley wall ---
+#
+# Failed bedrock does not vanish; it piles as talus against the freshly-cut
+# valley wall. Loose colluvium takes up more room than the solid rock it came
+# from, by the porosity "fluffing" factor 1 / (1 - lambda_p). We must place a
+# deposit of that area whose free surface stands at the colluvium angle of
+# repose, resting on the floor and leaning on the wall -- whatever the wall's
+# shape (it is generally non-vertical and, where incision crossed materials,
+# piecewise).
+#
+# This is a known, well-worn problem: positioning a line of fixed orientation
+# (the repose surface) to cut a polygon (the eroded void) to a target area. In
+# volume-of-fluid CFD it is PLIC interface positioning / volume conservation
+# enforcement. The area swept below the repose line is monotone in the line's
+# offset, so we simply solve area(offset) = target. Nothing new; boring on
+# purpose.
 
-    Failed bedrock does not vanish -- it piles at the base of the cliff. Loose
-    colluvium takes up more room than the solid rock it came from, by the
-    porosity "fluffing" factor 1 / (1 - lambda_p), so the deposited area is
+
+def _repose_halfplane(offset, void, slope):
+    """The half-plane below a repose line z = offset - slope * x, as a polygon.
+
+    Sized to cover the void, so intersecting it with the void gives everything
+    lying below the repose surface.
+    """
+    minx, miny, maxx, _ = void.bounds
+    x0, x1 = minx - 1.0, maxx + 1.0
+    z_top_x0 = offset - slope * x0
+    z_top_x1 = offset - slope * x1
+    # Keep the box bottom below both the void and the (sloped) top edge, so the
+    # trapezoid never self-intersects when the repose line dips low.
+    z_floor = min(miny, z_top_x0, z_top_x1) - 1.0
+    return Polygon([(x0, z_floor), (x1, z_floor),
+                    (x1, z_top_x1), (x0, z_top_x0)])
+
+
+def _deposit_below_repose(offset, void, slope):
+    """The part of the void lying below the repose surface at this offset."""
+    return void.intersection(_repose_halfplane(offset, void, slope))
+
+
+def _offset_bracket(void, slope):
+    """Offsets that empty / fill the void, bracketing the solution.
+
+    A boundary vertex (x, z) lies below the line z = offset - slope*x exactly
+    when offset >= z + slope*x, so the extreme values of (z + slope*x) over the
+    void bracket every partial fill.
+    """
+    e = np.array([z + slope * x for x, z in void.exterior.coords])
+    return float(e.min()), float(e.max())
+
+
+def position_repose_surface(target_area, void, alpha_c, method="brent",
+                            first_guess=None):
+    """Offset of the repose surface that traps `target_area` inside the void.
+
+    area(offset) is continuous and monotonically increasing, so any bracketed
+    or seeded root-finder converges. Methods (all agree to ~1e-12):
+      'brent'    -- Brent-Dekker on the bracket (the boring default)
+      'bisect'   -- bisection on the bracket (simplest; ~4x more clips)
+      'secant'   -- secant seeded by `first_guess` (few clips when the guess is
+                    good; this is where a closed-form first guess pays off)
+      'analytic' -- locate the event interval containing the solution, where
+                    area(offset) is exactly quadratic, and solve that quadratic
+    """
+    slope = np.tan(np.deg2rad(alpha_c))
+    lo, hi = _offset_bracket(void, slope)
+
+    def excess(offset):
+        return _deposit_below_repose(offset, void, slope).area - target_area
+
+    if method == "brent":
+        return brentq(excess, lo, hi, xtol=1e-12)
+    if method == "bisect":
+        return bisect(excess, lo, hi, xtol=1e-12)
+    if method == "secant":
+        if first_guess is None:
+            first_guess = lo + (hi - lo) * (target_area / void.area)
+        return newton(excess, x0=first_guess, tol=1e-12, maxiter=100)
+    if method == "analytic":
+        # Events are the offsets at which a void vertex crosses the line; the
+        # solution lies between two consecutive events, where the swept area is
+        # a quadratic in the offset. Sample three points there and solve it.
+        events = np.unique([z + slope * x for x, z in void.exterior.coords])
+        a = lo
+        for b in events[1:]:
+            if excess(b) >= 0.0:
+                break
+            a = b
+        xs = np.array([a, 0.5 * (a + b), b])
+        ys = np.array([_deposit_below_repose(x, void, slope).area for x in xs])
+        q2, q1, q0 = np.polyfit(xs, ys, 2)
+        roots = np.roots([q2, q1, q0 - target_area])
+        roots = roots[np.isreal(roots)].real
+        roots = roots[(roots >= a - 1e-9) & (roots <= b + 1e-9)]
+        return float(roots[0])
+    raise ValueError("Unknown method: %r" % method)
+
+
+def colluvial_pile(eroded_bedrock_area, void, alpha_c, lambda_p,
+                   method="brent", first_guess=None):
+    """Fit a talus of the (fluffed) eroded volume against the valley wall.
+
+    The colluvium fills the eroded `void` from the floor upward, its free
+    surface a straight line at the repose angle alpha_c, positioned so the
+    deposit area equals the porosity-fluffed eroded volume
 
         A = eroded_bedrock_area / (1 - lambda_p).
 
-    The pile is a triangular talus resting on the valley floor: its toe sits at
-    `toe = (x, z)`, it climbs up-valley against the cliff, and its top surface
-    stands at the colluvium angle of repose alpha_c. (Exact fitting to the cliff
-    face is a later refinement; the invariants here are the fluffed volume and
-    the repose-angle surface.)
+    If the void cannot hold it all, the remainder overflows -- in the coupled
+    setting, that overflow is colluvium delivered to the channel as sediment.
 
-    Returns the pile polygon.
+    Returns (pile, overflow): the talus Polygon and the area that would not fit.
     """
     A = eroded_bedrock_area / (1.0 - lambda_p)
-    slope = np.tan(np.deg2rad(alpha_c))     # repose surface: rise per run
-    base = np.sqrt(2.0 * A / slope)         # floor length of the talus wedge
-    height = base * slope                   # cliff-side height of the wedge
-    x0, z0 = toe
-    return Polygon([(x0, z0),
-                    (x0 - base, z0),
-                    (x0 - base, z0 + height)])
+    if void.area <= A:
+        return void, A - void.area
+    offset = position_repose_surface(A, void, alpha_c, method, first_guess)
+    slope = np.tan(np.deg2rad(alpha_c))
+    return _deposit_below_repose(offset, void, slope), 0.0
