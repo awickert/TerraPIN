@@ -14,7 +14,7 @@ pytest.importorskip("scipy")
 from shapely.geometry import box
 
 from terrapin import geometry
-from terrapin.model import Terrapin
+from terrapin import Terrapin
 
 REPOSE = {"bedrock": 75.0, "alluvium": 32.0, "colluvium": 20.0}
 
