@@ -4,7 +4,7 @@ Quickstart: the smallest useful TerraPIN run.
 
 Configure a cross-section, drive it through incision, lateral planation, and
 aggradation, read the emergent valley width, and plot it. (The richer,
-annotated terrace story is in vertical_only_terraces.py.)
+annotated terrace story is in symmetric_valley_terraces.py.)
 
 Run in the dedicated environment:
     conda run -n terrapin python examples/quickstart.py

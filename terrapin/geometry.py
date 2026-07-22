@@ -306,7 +306,7 @@ def valley_width(bodies, z_floor, x_channel=0.0, _eps=1e-6, _reach=1.0e6):
 
     The valley floor is the flat ground at (or near) z_floor; its width is the
     cross-valley distance out to the first thing higher than it -- the wall (or a
-    terrace riser). Measured from the geometry, for the symmetric (vertical-only)
+    terrace riser). Measured from the geometry, for the symmetric
     unit: twice the distance from the channel to where solid first rises above
     the floor. This is the emergent width TerraPIN hands to a coupled model.
 

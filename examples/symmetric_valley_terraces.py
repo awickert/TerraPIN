@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 """
-Worked example: terrace formation with vertical-only TerraPIN.
+Worked example: terrace formation with symmetric TerraPIN.
 
 Drives the geometry engine through a physically-ordered sequence and draws each
 stage as a labelled cross-section:
@@ -18,9 +18,9 @@ stage as a labelled cross-section:
                     fill (cut-in-fill) terrace; the strath is buried beneath it
 
 The unit models one valley wall; we mirror it about the channel (x = 0) so the
-figure reads as a full symmetric valley -- the vertical-only (laterally-fixed)
-model, in which the channel only incises/aggrades and the valley widens
-symmetrically around it.
+figure reads as a full symmetric valley -- the symmetric model, in which the
+channel holds its lateral position and the valley incises, aggrades, and planes
+symmetrically around it (the channel's own position/motion is not resolved).
 
 Run in the dedicated environment:
     conda run -n terrapin python examples/low_unit_terraces.py
@@ -140,11 +140,11 @@ handles.append(plt.Line2D([], [], marker="v", color="#1f6fb2", ls="",
 fig.legend(handles=handles, loc="lower center", ncol=5, fontsize=9,
            frameon=False, bbox_to_anchor=(0.5, 0.0))
 fig.suptitle("Strath planation, talus, and fill-terrace formation "
-             "(vertical-only TerraPIN)",
+             "(symmetric TerraPIN)",
              fontsize=13, fontweight="bold", y=0.99)
 fig.tight_layout(rect=(0, 0.08, 1, 0.95))
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "vertical_only_terraces.png")
+                   "symmetric_valley_terraces.png")
 fig.savefig(out, dpi=140, bbox_inches="tight")
 print("wrote", out)

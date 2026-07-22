@@ -22,7 +22,7 @@ material is carried off as sediment and the swept floor is left clean; the river
 cannot leave a talus pile in its own path. Talus is a separate, *river-absent*
 process (see below).
 
-## The one-wall unit; vertical-only vs. the standard model
+## The one-wall unit; symmetric vs. the standard model
 
 The atomic unit is a **one-wall half-section**: a single valley wall, the flat
 strath floor from the channel (`x = 0`) out to the wall base at `x = -w`, and the
@@ -30,9 +30,10 @@ channel bank on that side. Every operation in `geometry.py` acts on one such uni
 
 TerraPIN's two configurations differ only in **lateral channel dynamics**:
 
-- **vertical-only** (the simplification) — the channel moves only vertically
-  (incise / aggrade) and holds its lateral position; the valley widens
-  symmetrically around it. Built as *one* unit, **mirrored** about the channel to
+- **symmetric** (the simplification) — the channel holds its lateral position
+  (no migration or avulsion); the valley incises, aggrades, and planes laterally
+  in symmetric bulk, without resolving where the channel is. Built as *one* unit,
+  **mirrored** about the channel to
   give a full symmetric valley (width `= 2w`). Because the river is always present
   at the (single, mirrored) wall, **persistent talus is essentially absent** —
   which is honest; talus needs a wall the river has left.
@@ -43,8 +44,8 @@ TerraPIN's two configurations differ only in **lateral channel dynamics**:
   gets undercut (planed → sediment), while the wall it has **left** sheds a talus
   apron onto the quiet strath, which is **re-eroded** when the channel migrates
   back. This yields valley asymmetry, one-sided terrace preservation, and an
-  **emergent** valley width — none of which the symmetric vertical-only model can
-  produce. The unit code is shared, so vertical-only is literally one instance of
+  **emergent** valley width — none of which the symmetric model can
+  produce. The unit code is shared, so symmetric is literally one instance of
   the same building block, not a special case of a heavier one.
 
 Persistent, dynamic talus is therefore intrinsically a **standard-model**
