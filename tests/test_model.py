@@ -96,3 +96,119 @@ def test_class_matches_geometry_functions():
     tp.incise(-20.0)
     for name in ref_bodies:
         assert np.isclose(tp.bodies[name].area, ref_bodies[name].area)
+
+
+# ------------------------- provenance and terraces --------------------------
+#
+# A deposit holds the age of its deposition; a surface holds the age of its
+# abandonment. A terrace's age is the abandonment age, and nothing else -- the
+# deposit it is cut on has its own, separate deposition age. Terraces are the
+# flat benches read from the live geometry.
+
+
+def test_initial_bodies_have_unknown_formation_age():
+    # Pre-existing material was not deposited on our clock, so its formation
+    # age is unknown; its top is a surface not yet abandoned.
+    tp = fresh()
+    assert tp.provenance["bedrock"] == {"kind": "initial",
+                                        "lithology": "bedrock", "age": None}
+    top = tp._surface_at(0.0)
+    assert top is not None and top["kind"] == "initial"
+    assert top["abandoned"] is None
+
+
+def test_aggrade_records_deposit_formation_age():
+    # The fill is a deposit: it carries its formation age; its fresh top is a
+    # surface not yet abandoned (it is the live valley floor).
+    tp = fresh()
+    tp.incise(-20.0, age=1.0)
+    tp.aggrade(-12.0, age=5.0)
+    assert tp.provenance["alluvium_fill_0"]["kind"] == "fill"
+    assert tp.provenance["alluvium_fill_0"]["age"] == 5.0
+    assert tp._surface_at(-12.0)["abandoned"] is None
+
+
+def test_plane_laterally_records_strath_abandonment_span():
+    # Planation both cuts the strath and abandons it, over the sweep's duration.
+    tp = fresh()
+    tp.incise(-20.0, age=1.0)
+    tp.plane_laterally(30.0, age=(1.0, 3.0))
+    strath = tp._surface_at(-20.0)
+    assert strath["kind"] == "strath"
+    assert strath["abandoned"] == (1.0, 3.0)
+
+
+def test_incise_abandons_the_surface_it_strands():
+    # The first incision strands the original valley-margin surface, stamping it
+    # with the incision's age.
+    tp = fresh()
+    tp.incise(-20.0, age=7.0)
+    terr = tp.terraces()
+    assert len(terr) == 1
+    t = terr[0]
+    assert t["z"] == 0.0 and t["kind"] == "initial"
+    assert t["deposit_age"] is None and t["age"] == 7.0
+
+
+def test_fill_terrace_age_is_abandonment_not_deposition():
+    # A cut-fill-recut sequence. The terrace's age is the re-incision that
+    # stranded it (abandonment) -- NOT the fill's deposition. The deposition age
+    # is the deposit's own, reported separately as deposit_age.
+    tp = fresh()
+    tp.incise(-15.0, age=10.0)
+    tp.plane_laterally(44.0, age=(10.0, 14.0))
+    tp.aggrade(-6.0, age=20.0)
+    tp.set_channel_width(0.0)                      # narrow inner channel
+    tp.incise(-20.0, age=30.0)
+    fills = [t for t in tp.terraces() if t["kind"] == "fill"]
+    assert len(fills) == 1
+    t = fills[0]
+    assert np.isclose(t["z"], -6.0)
+    assert t["age"] == 30.0                        # the terrace age: abandonment
+    assert t["deposit_age"] == 20.0               # the deposit's own, separate age
+    assert t["body"] == "alluvium_fill_0"
+
+
+def test_buried_strath_is_not_reported_as_a_terrace():
+    # The strath is buried by the fill, so it is not an exposed bench -- yet its
+    # record still carries the planation-sweep abandonment for if it re-emerges.
+    tp = fresh()
+    tp.incise(-15.0, age=10.0)
+    tp.plane_laterally(44.0, age=(10.0, 14.0))
+    tp.aggrade(-6.0, age=20.0)
+    tp.set_channel_width(0.0)
+    tp.incise(-20.0, age=30.0)
+    assert not any(np.isclose(t["z"], -15.0) for t in tp.terraces())
+    assert tp._surface_at(-15.0)["abandoned"] == (10.0, 14.0)
+
+
+def test_exposed_strath_terrace_carries_its_planation_span():
+    # With no fill to bury it, incising below the strath strands it as a terrace
+    # whose abandonment is the planation sweep, not the later incision.
+    tp = fresh()
+    tp.incise(-15.0, age=10.0)
+    tp.plane_laterally(44.0, age=(10.0, 14.0))
+    tp.set_channel_width(0.0)
+    tp.incise(-25.0, age=30.0)
+    straths = [t for t in tp.terraces() if t["kind"] == "strath"]
+    assert len(straths) == 1
+    t = straths[0]
+    assert np.isclose(t["z"], -15.0)
+    assert t["age"] == (10.0, 14.0)                # the sweep, not the incision
+    assert t["deposit_age"] is None                # erosional: no deposit beneath
+    assert t["lithology"] == "bedrock"             # a strath is cut into rock
+
+
+def test_terraces_are_read_from_live_geometry():
+    # The re-incision wall eats into the fill bench, so the reported tread is
+    # shorter than the fill and offset from the channel -- proof the extent comes
+    # from the current geometry, not a remembered span.
+    tp = fresh()
+    tp.incise(-15.0, age=10.0)
+    tp.plane_laterally(44.0, age=(10.0, 14.0))
+    tp.aggrade(-6.0, age=20.0)
+    tp.set_channel_width(0.0)
+    tp.incise(-20.0, age=30.0)
+    t = [t for t in tp.terraces() if t["kind"] == "fill"][0]
+    assert t["x_far"] < t["x_near"] < 0.0          # a wall stands between it and x=0
+    assert 0.0 < t["width"] < 22.0                 # shorter than the 22 m half-width
