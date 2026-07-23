@@ -243,10 +243,12 @@ class StandardTerrapin(object):
         """
         out = []
         for z, x_far, x_near in geometry.treads_above(self.bodies, self.z_ch):
+            surf = self._surface_at(z)
+            if surf is None or surf.get("abandoned") is None:
+                continue                       # a terrace is an ABANDONED surface
             xm = 0.5 * (x_far + x_near)
             body = geometry._material_at(self.bodies, xm, z - self._PROBE)
             prov = self.provenance.get(body, {})
-            surf = self._surface_at(z) or {}
             out.append({
                 "z": z,
                 "x_near": x_near,
