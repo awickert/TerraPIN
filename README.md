@@ -1,4 +1,6 @@
 [![DOI](https://zenodo.org/badge/29247260.svg)](https://zenodo.org/badge/latestdoi/29247260)
+[![tests](https://github.com/MNiMORPH/TerraPIN/actions/workflows/tests.yml/badge.svg)](https://github.com/MNiMORPH/TerraPIN/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/terrapin-valley.svg)](https://pypi.org/project/terrapin-valley/)
 
 # TerraPIN
 
