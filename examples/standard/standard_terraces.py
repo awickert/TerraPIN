@@ -40,6 +40,7 @@ st.set_channel_position(0.0)
 st.set_channel_elevation(0.0)
 st.set_channel_width(20.0)
 st.set_channel_depth(4.0)
+st.establish_channel()                         # cut the initial channel into the ground
 
 fig, axes = plt.subplots(2, 3, figsize=(13.0, 6.4), sharex=True, sharey=True)
 ax = axes.ravel()

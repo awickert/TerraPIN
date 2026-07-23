@@ -95,6 +95,23 @@ class StandardTerrapin(object):
 
     # -------------------------- operations (told to it) ----------------------
 
+    def establish_channel(self):
+        """Cut the initial channel into the current ground at x_ch: its top sits at
+        the local surface and its bed one channel depth below, carved out of the
+        existing material (which forms its banks). Use once at setup so the model
+        starts with a real, bank-bounded channel rather than a bed drawn at the
+        surface. No-op with zero channel depth or width."""
+        if self.channel_depth <= 0 or self.channel_width <= 0:
+            return
+        surface = self._surface_elevation(self.x_ch)
+        if surface is None:
+            return
+        self.z_ch = surface - self.channel_depth
+        half_width = self.channel_width / 2.
+        channel = box(self.x_ch - half_width, self.z_ch,
+                      self.x_ch + half_width, surface)
+        self.bodies = {n: g.difference(channel) for n, g in self.bodies.items()}
+
     def incise(self, z_ch, age=None):
         """
         Incise the channel bed to z_ch at the current position x_ch, cutting BOTH
