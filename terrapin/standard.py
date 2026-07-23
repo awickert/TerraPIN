@@ -20,7 +20,7 @@ This is a work in progress: incision (both walls) is in place; migration,
 avulsion, aggradation, and talus dynamics are to follow.
 """
 import numpy as np
-from shapely.geometry import box
+from shapely.geometry import box, LineString
 from shapely.affinity import scale, translate
 from shapely.ops import unary_union
 
@@ -44,6 +44,7 @@ class StandardTerrapin(object):
         self.x_ch = 0.              # channel lateral position [m] (mobile)
         self.z_ch = None            # channel-bed elevation [m]
         self.channel_width = 0.     # flat width the incising river carves [m]
+        self.channel_depth = 0.     # channel depth an avulsion cuts on landing [m]
         self.repose_angles = None   # {lithology: angle of repose [degrees]}
         self.lambda_p = 0.35        # sediment porosity (fluffs eroded rock into colluvium)
         self.eroded = None          # {name: area}: material removed by the last cut
@@ -69,6 +70,10 @@ class StandardTerrapin(object):
     def set_channel_width(self, channel_width):
         """Set the flat channel width the incising river carves (default 0)."""
         self.channel_width = channel_width
+
+    def set_channel_depth(self, channel_depth):
+        """Set the channel depth an avulsion cuts into the surface where it lands."""
+        self.channel_depth = channel_depth
 
     def set_repose_angles(self, repose_angles):
         """Set the angle of repose of each lithology: {lithology: degrees}."""
@@ -111,6 +116,24 @@ class StandardTerrapin(object):
         wedge = self._wall_wedge(self.z_ch, floor_half_width, self.x_ch, side)
         self._remove(wedge)
         self.x_ch = x_new
+
+    def avulse(self, x_new):
+        """
+        Avulse the channel to x_new: a discontinuous hop. Unlike migration, the old
+        channel is abandoned IN PLACE and the ground between old and new positions
+        is NOT planed -- so the vacated belt is preserved, to be buried by later
+        aggradation. Where it lands, the new channel cuts down one channel depth
+        over one channel width, eroding a block of material from the local surface
+        downward; that block is exported as sediment. The new bed sits one channel
+        depth below the surface at x_new.
+        """
+        surface = self._surface_elevation(x_new)
+        z_bed = surface - self.channel_depth
+        half_width = self.channel_width / 2.
+        block = box(x_new - half_width, z_bed, x_new + half_width, surface)
+        self._remove(block)
+        self.x_ch = x_new
+        self.z_ch = z_bed
 
     def aggrade(self, z_fill):
         """
@@ -160,3 +183,9 @@ class StandardTerrapin(object):
         """A bounding box that spans the bodies and reaches above z_top."""
         minx, miny, maxx, maxy = unary_union(list(self.bodies.values())).bounds
         return box(minx, miny, maxx, max(maxy, z_top) + 1.)
+
+    def _surface_elevation(self, x, _reach=1.0e6):
+        """Elevation of the top of the solid column at cross-valley position x."""
+        solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
+        hit = LineString([(x, -_reach), (x, _reach)]).intersection(solid)
+        return None if hit.is_empty else hit.bounds[3]      # bounds[3] = maxy = top
