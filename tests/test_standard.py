@@ -288,6 +288,43 @@ def test_avulse_records_the_abandoned_channel_at_the_avulsion_age():
     assert surf["abandoned"] == 20.0
 
 
+# --- channel-belt deposition (migrate at capacity) ---
+
+def test_migrate_at_capacity_leaves_a_channel_belt_deposit():
+    st = fresh(0.0, 16.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0)
+    st.migrate(30.0, at_capacity=True, age=5.0)
+    belts = [n for n in st.bodies if "channel_belt" in n]
+    assert belts
+    belt = st.bodies[belts[0]]
+    assert np.isclose(belt.bounds[1], -15.0)              # bottom at the strath
+    assert belt.bounds[3] <= -15.0 + 4.0 + 1e-6           # top no higher than bank-top
+    assert st.provenance[belts[0]]["kind"] == "channel"
+    assert st.provenance[belts[0]]["age"] == 5.0
+
+
+def test_at_capacity_exports_less_than_erosional():
+    a = fresh(0.0, 16.0); a.set_channel_depth(4.0); a.incise(-15.0)
+    a.migrate(30.0, at_capacity=False)
+    b = fresh(0.0, 16.0); b.set_channel_depth(4.0); b.incise(-15.0)
+    b.migrate(30.0, at_capacity=True, age=5.0)
+    assert b.deposited > 0.0
+    assert b.sediment_out < a.sediment_out                # belt retained, less exported
+    assert np.isclose(a.sediment_out - b.deposited, b.sediment_out)   # net export
+
+
+def test_at_capacity_keeps_the_active_channel_open_with_belt_behind():
+    from shapely.geometry import Point
+    st = fresh(0.0, 16.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0)
+    st.migrate(30.0, at_capacity=True, age=5.0)
+    solid = unary_union(list(st.bodies.values()))
+    assert not solid.covers(Point(30.0, -14.5))           # active channel stays open
+    assert solid.covers(Point(10.0, -14.5))               # belt fills the swept corridor
+
+
 def test_abandoned_channel_survives_as_a_paleochannel_terrace():
     # Avulse preserves the old channel in place; when the new channel later cuts
     # below it, it stands as a channel terrace dated to the AVULSION, not the

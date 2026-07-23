@@ -51,6 +51,7 @@ class StandardTerrapin(object):
         self.deposited = 0.         # material laid down by the last aggradation [area]
         self.sediment_out = 0.      # material exported by the last operation [area]
         self._n_fill = 0            # counter so each aggradation gets its own body
+        self._n_belt = 0            # counter so each channel-belt deposit gets its own body
         self.provenance = {}        # {name: {kind, lithology, age}}: deposit + its formation age
         self.surfaces = []          # [{kind, z, abandoned}]: surfaces + their abandonment age
 
@@ -110,24 +111,35 @@ class StandardTerrapin(object):
         self._remove(notch)
         self.z_ch = z_ch
 
-    def migrate(self, x_new):
+    def migrate(self, x_new, at_capacity=False, age=None):
         """
         Migrate the channel laterally to x_new at the current bed elevation,
         planing a strath across the swept corridor and undercutting the wall it
         advances INTO. The retreating side's wall is left untouched (its strath is
-        abandoned, and can shed talus later). All eroded material is swept away as
-        sediment. Geometrically this rebuilds only the advancing wall: a one-wall
-        wedge whose floor reaches from the old channel to x_new plus half a channel
-        width, on whichever side the channel moved.
+        abandoned, and can shed talus later). Geometrically this rebuilds only the
+        advancing wall: a one-wall wedge whose floor reaches from the old channel to
+        x_new plus half a channel width, on whichever side the channel moved.
+
+        Whether the channel leaves sediment behind depends on the caller (it can
+        change through time): with at_capacity=True the channel is transporting at
+        capacity and leaves ~one channel depth of channel-belt alluvium above the
+        planed bedrock strath (a deposit, with formation age `age`), everywhere it
+        swept except the active channel itself; with at_capacity=False (default) it
+        is net erosional and planes a clean strath, exporting everything. The
+        reported sediment_out is the net export (eroded minus any belt deposited).
         """
         if x_new == self.x_ch:
             self.eroded = {n: 0.0 for n in self.bodies}
+            self.deposited = 0.0
             self.sediment_out = 0.0
             return
         side = "right" if x_new > self.x_ch else "left"
         floor_half_width = abs(x_new - self.x_ch) + self.channel_width / 2.
         wedge = self._wall_wedge(self.z_ch, floor_half_width, self.x_ch, side)
         self._remove(wedge)
+        self.deposited = 0.0
+        if at_capacity:
+            self._deposit_channel_belt(wedge, x_new, age)
         self.x_ch = x_new
 
     def avulse(self, x_new, age=None):
@@ -275,6 +287,30 @@ class StandardTerrapin(object):
         return unary_union([
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "left"),
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "right")])
+
+    def _deposit_channel_belt(self, wedge, x_new, age):
+        """Leave one channel depth of channel-belt alluvium above the planed strath.
+
+        The channel, transporting at capacity, backfills the corridor it swept from
+        the strath (z_ch) up to bank-top (z_ch + channel_depth) -- everywhere in the
+        just-eroded wedge except the active channel, which stays open. The alluvium
+        comes from the channel's load, so it is a deposit (a sink) and it reduces
+        the net sediment exported: sediment_out becomes eroded minus deposited.
+        """
+        minx, _, maxx, _ = wedge.bounds
+        band = box(minx, self.z_ch, maxx, self.z_ch + self.channel_depth)
+        half_width = self.channel_width / 2.
+        active = box(x_new - half_width, self.z_ch,
+                     x_new + half_width, self.z_ch + self.channel_depth)
+        belt = wedge.intersection(band).difference(active)
+        if belt.is_empty:
+            return
+        name = "channel_belt_%d" % self._n_belt
+        self.bodies[name] = belt
+        self._record_deposit(name, kind="channel", age=age)
+        self._n_belt += 1
+        self.deposited = belt.area
+        self.sediment_out -= belt.area          # net export = eroded - deposited
 
     def _domain(self, z_top):
         """A bounding box that spans the bodies and reaches above z_top."""
