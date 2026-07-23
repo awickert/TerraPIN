@@ -358,22 +358,23 @@ class StandardTerrapin(object):
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "right")])
 
     def _deposit_channel_belt(self, x_new, age):
-        """Fill the valley floor with one channel depth of channel-belt alluvium.
+        """Lay a channel-belt of alluvium, one channel depth thick, bank to bank.
 
-        A channel transporting at capacity aggrades its whole floodplain to
-        bank-top, so the belt is the open valley floor in the band from the strath
-        (z_ch) up to bank-top (z_ch + channel_depth), everywhere between the walls
-        EXCEPT the active channel -- which for a lateral sweep spans from the
-        retreating wall to the river. The alluvium comes from the channel's load,
-        so it is a deposit (a sink) and it reduces the net sediment exported:
-        sediment_out becomes eroded minus deposited.
+        Because this is a MIGRATION (not aggradation), the belt is defined by the
+        sweep: it fills the corridor from the retreating bank to the advancing bank
+        -- min(old, new) - half_width to max(old, new) + half_width -- in the band
+        from the strath (z_ch) up to bank-top (z_ch + channel_depth), minus the
+        active channel. The alluvium comes from the channel's load, so it is a
+        deposit (a sink) and reduces the net sediment exported: sediment_out
+        becomes eroded minus deposited. (self.x_ch is still the old position here.)
         """
         z0, z1 = self.z_ch, self.z_ch + self.channel_depth
-        minx, _, maxx, _ = unary_union(list(self.bodies.values())).bounds
-        solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
         half_width = self.channel_width / 2.
+        lo = min(self.x_ch, x_new) - half_width     # retreating bank
+        hi = max(self.x_ch, x_new) + half_width     # advancing bank
+        solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
         active = box(x_new - half_width, z0, x_new + half_width, z1)
-        belt = box(minx, z0, maxx, z1).difference(solid).difference(active)
+        belt = box(lo, z0, hi, z1).difference(solid).difference(active)
         if belt.is_empty:
             return
         name = "channel_belt_%d" % self._n_belt
