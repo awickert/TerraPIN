@@ -1,6 +1,54 @@
-# Build configuration. Project metadata still lives in setup.py; this file
-# provides the modern build-system table so `python -m build` and PyPI tooling
-# work (replacing the retired ez_setup bootstrap).
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["terrapin"]
+
+[project]
+name = "terrapin-valley"        # PyPI distribution name; import is `terrapin`
+dynamic = ["version"]
+dependencies = [
+  "numpy>=2",         # the geometry engine targets NumPy 2
+  "shapely>=2",       # GEOS predicates / polygon algebra
+  "scipy",            # root-finders for the colluvial-pile solver
+  "matplotlib",       # cross-section plotting
+]
+requires-python = ">=3.10"
+authors = [
+  { name="Andrew D. Wickert", email="awickert@umn.edu" },
+]
+description = "Models the evolution of river-valley cross-sections and their terraces"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
+keywords = [
+  "earth science",
+  "geomorphology",
+  "fluvial",
+  "rivers",
+  "terraces",
+  "numerical modeling",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "terrapin._version.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.urls]
+Homepage = "https://csdms.colorado.edu/wiki/Model:Terrapin"
+Repository = "https://github.com/MNiMORPH/TerraPIN"
+Issues = "https://github.com/MNiMORPH/TerraPIN/issues"
