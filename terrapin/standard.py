@@ -140,7 +140,7 @@ class StandardTerrapin(object):
         self._remove(wedge)
         self.deposited = 0.0
         if at_capacity:
-            self._deposit_channel_belt(wedge, x_new, age)
+            self._deposit_channel_belt(x_new, age)
         self.x_ch = x_new
 
     def avulse(self, x_new, age=None):
@@ -275,8 +275,15 @@ class StandardTerrapin(object):
                                 xytext=(0, 4), textcoords="offset points",
                                 ha="center", va="bottom", fontsize=7,
                                 color="#7a1116", zorder=5)
-        ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
-                markeredgecolor="k", zorder=6)
+        half_width = self.channel_width / 2.
+        if half_width > 0:                          # finite channel: a river-blue box
+            x0, x1 = self.x_ch - half_width, self.x_ch + half_width
+            z1 = self.z_ch + self.channel_depth
+            ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, z1, z1],
+                    facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
+        else:                                       # zero width: a point marker
+            ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
+                    markeredgecolor="k", zorder=6)
         ax.set_xlabel("cross-valley distance [m]")
         ax.set_ylabel("elevation [m]")
         ax.set_aspect("equal")
@@ -350,21 +357,23 @@ class StandardTerrapin(object):
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "left"),
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "right")])
 
-    def _deposit_channel_belt(self, wedge, x_new, age):
-        """Leave one channel depth of channel-belt alluvium above the planed strath.
+    def _deposit_channel_belt(self, x_new, age):
+        """Fill the valley floor with one channel depth of channel-belt alluvium.
 
-        The channel, transporting at capacity, backfills the corridor it swept from
-        the strath (z_ch) up to bank-top (z_ch + channel_depth) -- everywhere in the
-        just-eroded wedge except the active channel, which stays open. The alluvium
-        comes from the channel's load, so it is a deposit (a sink) and it reduces
-        the net sediment exported: sediment_out becomes eroded minus deposited.
+        A channel transporting at capacity aggrades its whole floodplain to
+        bank-top, so the belt is the open valley floor in the band from the strath
+        (z_ch) up to bank-top (z_ch + channel_depth), everywhere between the walls
+        EXCEPT the active channel -- which for a lateral sweep spans from the
+        retreating wall to the river. The alluvium comes from the channel's load,
+        so it is a deposit (a sink) and it reduces the net sediment exported:
+        sediment_out becomes eroded minus deposited.
         """
-        minx, _, maxx, _ = wedge.bounds
-        band = box(minx, self.z_ch, maxx, self.z_ch + self.channel_depth)
+        z0, z1 = self.z_ch, self.z_ch + self.channel_depth
+        minx, _, maxx, _ = unary_union(list(self.bodies.values())).bounds
+        solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
         half_width = self.channel_width / 2.
-        active = box(x_new - half_width, self.z_ch,
-                     x_new + half_width, self.z_ch + self.channel_depth)
-        belt = wedge.intersection(band).difference(active)
+        active = box(x_new - half_width, z0, x_new + half_width, z1)
+        belt = box(minx, z0, maxx, z1).difference(solid).difference(active)
         if belt.is_empty:
             return
         name = "channel_belt_%d" % self._n_belt
