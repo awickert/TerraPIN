@@ -11,7 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    env:
+      # Headless runner: use a non-interactive matplotlib backend, since
+      # terrapin imports matplotlib.pyplot at import time.
+      MPLBACKEND: Agg
+
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
