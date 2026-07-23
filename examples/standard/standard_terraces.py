@@ -49,11 +49,11 @@ st.incise(-12.0, age=5.0)
 st.plot(ax=ax[1]); ax[1].set_title("2. incise (centre)", fontsize=10, fontweight="bold")
 st.migrate(45.0, at_capacity=True, age=10.0)
 st.plot(ax=ax[2]); ax[2].set_title("3. migrate right, at capacity", fontsize=10, fontweight="bold")
-st.avulse(-45.0, age=15.0)
-st.plot(ax=ax[3]); ax[3].set_title("4. avulse left", fontsize=10, fontweight="bold")
+st.avulse(-10.0, age=15.0)
+st.plot(ax=ax[3]); ax[3].set_title("4. avulse (onto the belt)", fontsize=10, fontweight="bold")
 st.aggrade(-2.0, age=20.0)
 st.plot(ax=ax[4]); ax[4].set_title("5. aggrade (bury)", fontsize=10, fontweight="bold")
-st.set_channel_width(0.0)
+st.set_channel_width(8.0)
 st.incise(-18.0, age=30.0)
 st.plot(ax=ax[5]); ax[5].set_title("6. re-incise (terraces)", fontsize=10, fontweight="bold")
 
@@ -65,14 +65,14 @@ for a in ax:
 
 handles = [Patch(facecolor=c, edgecolor="k", hatch=h, label=k)
            for k, (c, h) in StandardTerrapin._STYLE.items()]
+handles.append(Patch(facecolor="#2b7bba", edgecolor="k", label="river"))
 handles.append(plt.Line2D([], [], color="#c1272d", lw=2.4, label="terrace"))
-handles.append(plt.Line2D([], [], marker="v", color="#1f6fb2", ls="",
-                          markeredgecolor="k", label="channel"))
 fig.legend(handles=handles, loc="lower center", ncol=7, fontsize=8.5,
            frameon=False, bbox_to_anchor=(0.5, 0.0))
 fig.suptitle("Standard TerraPIN: migration, avulsion, channel belts, and terraces "
              "(vertical exaggeration %g×)" % VE, fontsize=13, fontweight="bold")
-fig.tight_layout(rect=(0, 0.05, 1, 0.96))
+fig.subplots_adjust(left=0.05, right=0.98, top=0.89, bottom=0.13,
+                    hspace=0.55, wspace=0.22)
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "standard_terraces.png")
 fig.savefig(out, dpi=140, bbox_inches="tight")
