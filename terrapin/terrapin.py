@@ -20,6 +20,8 @@ from shapely.ops import unary_union
 
 from . import geometry
 
+__all__ = ["Terrapin"]
+
 
 class Terrapin(object):
     """
