@@ -81,3 +81,9 @@ conda run -n terrapin python -m pytest
 - **[`examples/`](examples)** — worked cross-sections, including
   `terrace_tracking.py` (terraces read back and labelled by age) and
   `symmetric_valley_terraces.py` (strath, talus, and fill-terrace formation).
+
+## Citing
+
+If you use TerraPIN, please cite it: GitHub builds a ready-made citation from
+[`CITATION.cff`](CITATION.cff) (the "Cite this repository" button), and every
+release is archived on Zenodo with a DOI.
