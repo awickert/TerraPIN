@@ -20,6 +20,7 @@ pytest.importorskip("shapely")
 pytest.importorskip("scipy")
 from shapely.geometry import box
 from shapely.affinity import scale
+from shapely.ops import unary_union
 
 from terrapin import Terrapin
 from terrapin.standard import StandardTerrapin
@@ -47,21 +48,27 @@ def thick_pair():          # 20 m of alluvium instead of 8 m
             lambda: alluvium_over_bedrock(-80.0, 80.0, contact=-20.0))
 
 
-# label, (left_fn, full_fn) pair, channel width, incision steps
+# label, (left_fn, full_fn) pair, channel width, [(op, level), ...]
 REPRO_CASES = [
-    ("point-channel",  std_pair(),    0.0, [-15.0]),
-    ("narrow",         std_pair(),    8.0, [-15.0]),
-    ("wide",           std_pair(),   40.0, [-15.0]),
-    ("shallow",        std_pair(),   22.0, [-5.0]),
-    ("deep",           std_pair(),   22.0, [-30.0]),
-    ("two-step",       std_pair(),   16.0, [-12.0, -22.0]),
-    ("thick-alluvium", thick_pair(), 22.0, [-15.0]),
+    ("point-channel",  std_pair(),    0.0, [("incise", -15.0)]),
+    ("narrow",         std_pair(),    8.0, [("incise", -15.0)]),
+    ("wide",           std_pair(),   40.0, [("incise", -15.0)]),
+    ("shallow",        std_pair(),   22.0, [("incise", -5.0)]),
+    ("deep",           std_pair(),   22.0, [("incise", -30.0)]),
+    ("two-step",       std_pair(),   16.0, [("incise", -12.0), ("incise", -22.0)]),
+    ("thick-alluvium", thick_pair(), 22.0, [("incise", -15.0)]),
+    ("incise-aggrade", std_pair(),   16.0, [("incise", -20.0), ("aggrade", -8.0)]),
+    ("cut-fill-recut", std_pair(),   16.0, [("incise", -15.0), ("aggrade", -6.0),
+                                            ("incise", -22.0)]),
 ]
 
 
 @pytest.mark.parametrize("label,pair,width,steps", REPRO_CASES,
                          ids=[c[0] for c in REPRO_CASES])
 def test_centered_reproduces_symmetric(label, pair, width, steps):
+    # A centered channel has no lateral asymmetry, so any sequence of the ops that
+    # the symmetric model also has must reproduce the symmetric (one-wall) result
+    # in the standard model's left half.
     left_fn, full_fn = pair
     sym = Terrapin()
     sym.set_bodies(left_fn())
@@ -74,9 +81,9 @@ def test_centered_reproduces_symmetric(label, pair, width, steps):
     std.set_channel_position(0.0)
     std.set_channel_elevation(0.0)
     std.set_channel_width(width)
-    for z in steps:
-        sym.incise(z)
-        std.incise(z)
+    for op, level in steps:
+        getattr(sym, op)(level)
+        getattr(std, op)(level)
     for name in sym.bodies:
         std_left = std.bodies[name].intersection(LEFT_HALF).area
         assert np.isclose(std_left, sym.bodies[name].area), (label, name)
@@ -124,3 +131,50 @@ def test_incision_exports_sediment_and_conserves_mass():
     assert st.sediment_out > 0.0
     assert np.isclose(st.sediment_out, sum(st.eroded.values()))
     assert np.isclose(before - after, st.sediment_out)
+
+
+# --- migrate ---
+
+def test_migrate_leaves_the_retreating_wall_and_conserves_mass():
+    st = fresh(0.0, 22.0)
+    st.incise(-15.0)
+    retreating = box(-80.0, -60.0, -11.0 - 1e-9, 5.0)      # left of the channel floor
+    left_before = unary_union(list(st.bodies.values())).intersection(retreating).area
+    before = sum(g.area for g in st.bodies.values())
+    st.migrate(25.0)
+    after = sum(g.area for g in st.bodies.values())
+    left_after = unary_union(list(st.bodies.values())).intersection(retreating).area
+    assert st.x_ch == 25.0
+    assert np.isclose(left_before, left_after)            # retreating wall untouched
+    assert st.sediment_out > 0.0
+    assert np.isclose(before - after, st.sediment_out)    # mass conserved
+
+
+def test_migrate_to_same_position_is_a_noop():
+    st = fresh(0.0, 22.0)
+    st.incise(-15.0)
+    before = {n: g.area for n, g in st.bodies.items()}
+    st.migrate(0.0)
+    assert st.sediment_out == 0.0
+    for name, area in before.items():
+        assert np.isclose(st.bodies[name].area, area)
+
+
+def test_migrate_left_and_right_are_mirror_images():
+    # From a symmetric initial valley, migrating right by d and left by d give
+    # mirror-image results (equal areas, equal eroded volumes).
+    r = fresh(0.0, 22.0); r.incise(-15.0); r.migrate(20.0)
+    l = fresh(0.0, 22.0); l.incise(-15.0); l.migrate(-20.0)
+    for name in r.bodies:
+        assert np.isclose(r.bodies[name].area, l.bodies[name].area)
+        assert np.isclose(r.eroded[name], l.eroded[name])
+
+
+def test_migrate_planes_the_swept_corridor_to_bed_level():
+    from shapely.geometry import Point
+    st = fresh(0.0, 22.0)
+    st.incise(-15.0)
+    st.migrate(25.0)
+    solid = unary_union(list(st.bodies.values()))
+    # a point just above the bed inside the swept corridor is now open (planed)
+    assert not solid.covers(Point(18.0, st.z_ch + 0.5))
