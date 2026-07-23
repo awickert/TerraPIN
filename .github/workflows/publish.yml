@@ -1,37 +1,63 @@
-name: publish
+name: Publish to PyPI
 
-# Build the distribution and upload it to PyPI when a GitHub release is
-# published. Uses PyPI Trusted Publishing (OIDC) -- no API token or secret is
-# stored; PyPI must be configured to trust this repository + workflow (see below).
+# Build the distribution and upload it to PyPI when a GitHub Release is
+# published (or on a manual workflow_dispatch). Uses PyPI Trusted Publishing
+# (OIDC), so no API token or secret is stored in the repository.
 #
-# One-time PyPI setup (owner only), at
-# https://pypi.org/manage/account/publishing/ -- add a pending publisher:
-#   PyPI project name: terrapin-valley
-#   Owner:             MNiMORPH
-#   Repository name:   TerraPIN
-#   Workflow name:     publish.yml
-#   Environment name:  pypi
+# The work is split so that only the small publish job holds the OIDC token:
+# the build job (which runs packaging code) has no special permissions, and
+# hands its artifacts to the publish job.
+#
+# One-time setup (cannot be done from here):
+#   1. Register a Trusted Publisher on PyPI:
+#      https://pypi.org/manage/account/publishing/
+#        PyPI project name: terrapin-valley
+#        Owner:             MNiMORPH
+#        Repository name:   TerraPIN
+#        Workflow name:     publish.yml
+#        Environment name:  pypi
+#   2. Create a "pypi" environment in the GitHub repo settings, ideally with
+#      required reviewers so every upload gets a manual approval.
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
-  build-and-publish:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Install build and twine
+        run: pip install build twine
+      - name: Build package
+        run: python -m build
+      - name: Check distribution
+        run: twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/terrapin-valley
     permissions:
-      id-token: write        # required for Trusted Publishing (OIDC)
+      id-token: write  # required for Trusted Publishing (OIDC)
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/download-artifact@v8
         with:
-          python-version: "3.12"
-      - name: Build sdist and wheel
-        run: |
-          python -m pip install --upgrade build
-          python -m build
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+          name: python-package-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
