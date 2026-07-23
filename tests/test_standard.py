@@ -214,3 +214,51 @@ def test_avulse_conserves_mass():
     st.avulse(50.0)
     after = sum(g.area for g in st.bodies.values())
     assert np.isclose(before - after, st.sediment_out)
+
+
+# --- provenance and terraces (incise / aggrade) ---
+
+def test_initial_bodies_have_unknown_formation_age():
+    st = fresh(0.0, 22.0)
+    assert st.provenance["bedrock"] == {"kind": "initial",
+                                        "lithology": "bedrock", "age": None}
+    assert st.provenance["alluvium"]["kind"] == "initial"
+
+
+def test_aggrade_records_a_floodplain_deposit():
+    st = fresh(0.0, 16.0)
+    st.incise(-20.0, age=1.0)
+    st.aggrade(-8.0, age=5.0)
+    prov = st.provenance["alluvium_fill_0"]
+    assert prov["kind"] == "floodplain"
+    assert prov["age"] == 5.0
+
+
+def test_fill_terrace_reports_abandonment_and_deposition():
+    st = StandardTerrapin()
+    st.set_bodies(alluvium_over_bedrock(-80.0, 80.0))
+    st.set_repose_angles(REPOSE)
+    st.set_channel_position(0.0)
+    st.set_channel_elevation(0.0)
+    st.set_channel_width(16.0)
+    st.incise(-15.0, age=10.0)
+    st.aggrade(-6.0, age=20.0)
+    st.set_channel_width(0.0)
+    st.incise(-20.0, age=30.0)              # strands the fill top at -6
+    fills = [t for t in st.terraces()
+             if t["kind"] == "floodplain" and np.isclose(t["z"], -6.0)]
+    assert fills                             # a floodplain terrace survives
+    t = fills[0]
+    assert t["age"] == 30.0                  # the terrace age: abandonment
+    assert t["deposit_age"] == 20.0          # the fill's own deposition age
+
+
+def test_terraces_are_symmetric_for_a_centered_channel():
+    # A centered channel strands terraces symmetrically: each appears on both
+    # sides at the same elevation with the same age.
+    st = fresh(0.0, 0.0)
+    st.incise(-15.0, age=10.0)               # strands the initial margins at z=0
+    terr = st.terraces()
+    left = sorted(t["z"] for t in terr if t["x_near"] <= 0.0)
+    right = sorted(t["z"] for t in terr if t["x_far"] >= 0.0)
+    assert left and np.allclose(left, right)
