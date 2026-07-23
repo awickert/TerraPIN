@@ -134,10 +134,14 @@ class StandardTerrapin(object):
         """
         Migrate the channel laterally to x_new at the current bed elevation,
         planing a strath across the swept corridor and undercutting the wall it
-        advances INTO. The retreating side's wall is left untouched (its strath is
-        abandoned, and can shed talus later). Geometrically this rebuilds only the
-        advancing wall: a one-wall wedge whose floor reaches from the old channel to
-        x_new plus half a channel width, on whichever side the channel moved.
+        advances INTO. The channel bed sweeps the whole corridor, so it erodes
+        EVERYTHING above the bed there: the channel cannot slide under an overhang
+        (an isolated body or valley-wall alluvium hanging over the swept ground is
+        cut through, not left overhanging). Geometrically the removed region is the
+        full column across the corridor -- from the retreating bank to the advancing
+        bank -- unioned with a repose wedge that grades the advancing wall beyond it.
+        The retreating side's wall is left untouched (its strath is abandoned, and
+        can shed talus later).
 
         Whether the channel leaves sediment behind depends on the caller (it can
         change through time): with at_capacity=True the channel is transporting at
@@ -155,7 +159,16 @@ class StandardTerrapin(object):
         side = "right" if x_new > self.x_ch else "left"
         floor_half_width = abs(x_new - self.x_ch) + self.channel_width / 2.
         wedge = self._wall_wedge(self.z_ch, floor_half_width, self.x_ch, side)
-        self._remove(wedge)
+        # The channel bed sweeps the whole corridor, so it erodes EVERYTHING above
+        # the bed there: it cannot slide under an overhang. Remove the full column
+        # across the swept corridor (bank to bank), then let the advancing wall
+        # grade back to repose beyond it.
+        half_width = self.channel_width / 2.
+        lo = min(self.x_ch, x_new) - half_width         # retreating bank
+        hi = max(self.x_ch, x_new) + half_width         # advancing bank
+        ceiling = unary_union(list(self.bodies.values())).bounds[3] + 1.0
+        corridor = box(lo, self.z_ch, hi, ceiling)
+        self._remove(unary_union([corridor, wedge]))
         self.deposited = 0.0
         if at_capacity:
             self._deposit_channel_belt(x_new, age)

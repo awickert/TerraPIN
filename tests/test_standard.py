@@ -180,6 +180,25 @@ def test_migrate_planes_the_swept_corridor_to_bed_level():
     assert not solid.covers(Point(18.0, st.z_ch + 0.5))
 
 
+def test_migrate_erodes_an_overhang_it_cannot_slide_under():
+    # A channel migrating at bed level cannot pass beneath overhanging material:
+    # a floating slab above the swept corridor must be eroded, not left overhanging.
+    st = StandardTerrapin()
+    st.set_bodies({
+        "bedrock": box(-100.0, -70.0, 100.0, -20.0),   # top at -20
+        "slab":    box(-30.0, -14.0,  10.0, -10.0),     # floating overhang, z=-14..-10
+    })
+    st.set_repose_angles(REPOSE)
+    st.set_channel_position(50.0)
+    st.set_channel_elevation(-16.0)                     # bed below the slab base
+    st.set_channel_width(10.0)
+    st.migrate(-50.0)                                   # sweep the bed under the slab
+    # nothing solid may remain above the bed across the swept corridor
+    corridor = box(-55.0, st.z_ch + 1e-6, 55.0, 100.0)
+    survives = unary_union(list(st.bodies.values())).intersection(corridor).area
+    assert np.isclose(survives, 0.0)
+
+
 # --- avulse ---
 
 def test_avulse_erodes_one_channel_depth_and_width():
