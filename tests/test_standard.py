@@ -178,3 +178,39 @@ def test_migrate_planes_the_swept_corridor_to_bed_level():
     solid = unary_union(list(st.bodies.values()))
     # a point just above the bed inside the swept corridor is now open (planed)
     assert not solid.covers(Point(18.0, st.z_ch + 0.5))
+
+
+# --- avulse ---
+
+def test_avulse_erodes_one_channel_depth_and_width():
+    st = fresh(0.0, 22.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0)
+    st.avulse(50.0)                        # land on flat floodplain (surface z = 0)
+    assert st.x_ch == 50.0
+    assert np.isclose(st.z_ch, -4.0)       # one channel depth below the surface
+    assert np.isclose(st.sediment_out, 22.0 * 4.0)      # width x depth
+    assert np.isclose(st.sediment_out, sum(st.eroded.values()))
+
+
+def test_avulse_preserves_the_abandoned_belt():
+    # Unlike migrate, avulse does not plane the corridor: the ground between the
+    # old channel and the landing site is left untouched.
+    st = fresh(0.0, 22.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0)
+    corridor = box(12.0, -60.0, 38.0, 5.0)    # between old channel (+11) and new (39)
+    before = unary_union(list(st.bodies.values())).intersection(corridor).area
+    st.avulse(50.0)
+    after = unary_union(list(st.bodies.values())).intersection(corridor).area
+    assert np.isclose(before, after)
+
+
+def test_avulse_conserves_mass():
+    st = fresh(0.0, 22.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0)
+    before = sum(g.area for g in st.bodies.values())
+    st.avulse(50.0)
+    after = sum(g.area for g in st.bodies.values())
+    assert np.isclose(before - after, st.sediment_out)
