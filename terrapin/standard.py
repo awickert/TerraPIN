@@ -179,16 +179,29 @@ class StandardTerrapin(object):
         surface until a later incision strands it as a fill terrace.
         """
         name = "alluvium_fill_%d" % self._n_fill
-        self.bodies, deposited = geometry.aggrade(
+        self.bodies, _ = geometry.aggrade(
             self.bodies, z_fill, self._domain(z_fill), name=name)
-        # The channel is incised into its fresh floodplain: its bed sits one channel
-        # depth below the new surface, and the fill leaves that channel open (so the
-        # river is bank-bounded, not perched atop the fill).
+        fill = self.bodies[name]
         self.z_ch = z_fill - self.channel_depth
         half_width = self.channel_width / 2.
-        channel = box(self.x_ch - half_width, self.z_ch, self.x_ch + half_width, z_fill)
-        self.bodies[name] = self.bodies[name].difference(channel)
-        self.deposited = self.bodies[name].area
+        self.deposited = fill.area
+        if self.channel_depth > 0 and half_width > 0:
+            # The channel aggrades with its floodplain: its bed rises to one channel
+            # depth below the new surface, leaving CHANNEL-BELT deposit in its column
+            # below the new bed and the channel itself open above it. Outside the
+            # column, the fill is overbank floodplain.
+            column = box(self.x_ch - half_width, z_fill - 1.0e6,
+                         self.x_ch + half_width, z_fill)
+            channel = box(self.x_ch - half_width, self.z_ch,
+                          self.x_ch + half_width, z_fill)          # open channel
+            belt = fill.intersection(column).difference(channel)   # channel-belt below the bed
+            self.bodies[name] = fill.difference(column)            # overbank floodplain
+            if not belt.is_empty:
+                belt_name = "channel_belt_%d" % self._n_belt
+                self.bodies[belt_name] = belt
+                self._record_deposit(belt_name, kind="channel", age=age)
+                self._n_belt += 1
+            self.deposited = self.bodies[name].area + belt.area
         self._record_deposit(name, kind="floodplain", age=age)
         self._record_surface("floodplain", z_fill, abandoned=None)
         self._n_fill += 1
@@ -284,11 +297,16 @@ class StandardTerrapin(object):
                                 color="#7a1116", zorder=5)
         half_width = self.channel_width / 2.
         if half_width > 0:                          # finite channel: a river-blue box
-            x0, x1 = self.x_ch - half_width, self.x_ch + half_width
-            z1 = self.z_ch + self.channel_depth
-            ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, z1, z1],
-                    facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
-        else:                                       # zero width: a point marker
+            # never draw the channel above the ground: clip its top to the banks
+            banks = [self._surface_elevation(self.x_ch - half_width - 1.0e-3),
+                     self._surface_elevation(self.x_ch + half_width + 1.0e-3)]
+            banks = [b for b in banks if b is not None]
+            top = min([self.z_ch + self.channel_depth] + banks) if banks else self.z_ch
+            if top > self.z_ch + 1.0e-9:            # a real, bank-bounded channel
+                x0, x1 = self.x_ch - half_width, self.x_ch + half_width
+                ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, top, top],
+                        facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
+        elif self._surface_elevation(self.x_ch) is not None:
             ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
                     markeredgecolor="k", zorder=6)
         ax.set_xlabel("cross-valley distance [m]")
