@@ -81,6 +81,8 @@ conda run -n terrapin python -m pytest
 - **[`examples/`](examples)** — worked cross-sections, including
   `terrace_tracking.py` (terraces read back and labelled by age) and
   `symmetric_valley_terraces.py` (strath, talus, and fill-terrace formation).
+- **[AlluvStrat](https://github.com/awickert/alluvstrat)** — ADW's earlier raster
+  model of alluvial stratigraphy in strike-section.
 
 ## Citing
 
