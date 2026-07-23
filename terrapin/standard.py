@@ -179,12 +179,19 @@ class StandardTerrapin(object):
         surface until a later incision strands it as a fill terrace.
         """
         name = "alluvium_fill_%d" % self._n_fill
-        self.bodies, self.deposited = geometry.aggrade(
+        self.bodies, deposited = geometry.aggrade(
             self.bodies, z_fill, self._domain(z_fill), name=name)
+        # The channel is incised into its fresh floodplain: its bed sits one channel
+        # depth below the new surface, and the fill leaves that channel open (so the
+        # river is bank-bounded, not perched atop the fill).
+        self.z_ch = z_fill - self.channel_depth
+        half_width = self.channel_width / 2.
+        channel = box(self.x_ch - half_width, self.z_ch, self.x_ch + half_width, z_fill)
+        self.bodies[name] = self.bodies[name].difference(channel)
+        self.deposited = self.bodies[name].area
         self._record_deposit(name, kind="floodplain", age=age)
         self._record_surface("floodplain", z_fill, abandoned=None)
         self._n_fill += 1
-        self.z_ch = z_fill
         self.sediment_out = 0.
 
     # -------------------------------- outputs --------------------------------
