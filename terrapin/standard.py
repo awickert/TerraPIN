@@ -167,19 +167,20 @@ class StandardTerrapin(object):
         channel is abandoned IN PLACE and the ground between old and new positions
         is NOT planed -- so the vacated belt is preserved, to be buried by later
         aggradation. Where it lands, the new channel cuts down one channel depth
-        over one channel width, eroding a block of material from the local surface
-        downward; that block is exported as sediment. The new bed sits one channel
-        depth below the surface at x_new.
+        below the local surface and erodes EVERYTHING above its bed across its
+        width -- it cannot lie under material it did not erode (so where the width
+        spans higher valley-wall alluvium, that alluvium is cut through, not
+        overhung). The eroded material is exported as sediment.
 
         The avulsion abandons the old channel now, so the optional `age` is stamped
         on the abandoned channel floor -- its terrace age is this avulsion, not a
         later incision that might strand it.
         """
         self._record_surface("channel", self.z_ch, abandoned=age)
-        surface = self._surface_elevation(x_new)
-        z_bed = surface - self.channel_depth
+        z_bed = self._surface_elevation(x_new) - self.channel_depth
         half_width = self.channel_width / 2.
-        block = box(x_new - half_width, z_bed, x_new + half_width, surface)
+        ceiling = unary_union(list(self.bodies.values())).bounds[3] + 1.0
+        block = box(x_new - half_width, z_bed, x_new + half_width, ceiling)
         self._remove(block)
         self.x_ch = x_new
         self.z_ch = z_bed
