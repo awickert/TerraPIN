@@ -262,3 +262,43 @@ def test_terraces_are_symmetric_for_a_centered_channel():
     left = sorted(t["z"] for t in terr if t["x_near"] <= 0.0)
     right = sorted(t["z"] for t in terr if t["x_far"] >= 0.0)
     assert left and np.allclose(left, right)
+
+
+def test_migrate_strath_becomes_a_terrace_on_later_incision():
+    # A migration strath needs no explicit record: the later incision that strands
+    # it captures it as a strath terrace, abandoned at that incision.
+    st = fresh(0.0, 16.0)
+    st.incise(-15.0, age=10.0)
+    st.migrate(30.0)                         # sweep right; strath extends that way
+    st.set_channel_width(0.0)
+    st.incise(-25.0, age=30.0)               # incise below; strand the strath
+    straths = [t for t in st.terraces()
+               if t["kind"] == "strath" and np.isclose(t["z"], -15.0)]
+    assert straths
+    assert all(t["age"] == 30.0 for t in straths)      # abandoned by the -25 incision
+
+
+def test_avulse_records_the_abandoned_channel_at_the_avulsion_age():
+    st = fresh(0.0, 22.0)
+    st.set_channel_depth(4.0)
+    st.incise(-15.0, age=10.0)
+    st.avulse(50.0, age=20.0)                # abandon the old channel at -15
+    surf = st._surface_at(-15.0)
+    assert surf is not None and surf["kind"] == "channel"
+    assert surf["abandoned"] == 20.0
+
+
+def test_abandoned_channel_survives_as_a_paleochannel_terrace():
+    # Avulse preserves the old channel in place; when the new channel later cuts
+    # below it, it stands as a channel terrace dated to the AVULSION, not the
+    # later incision.
+    st = fresh(0.0, 22.0)
+    st.set_channel_depth(4.0)
+    st.incise(-8.0, age=10.0)                # shallow channel at x=0, z=-8
+    st.avulse(50.0, age=20.0)                # hop to x=50; old channel abandoned
+    st.set_channel_width(0.0)
+    st.incise(-15.0, age=30.0)               # new channel cuts below -8
+    chans = [t for t in st.terraces()
+             if t["kind"] == "channel" and np.isclose(t["z"], -8.0)]
+    assert chans
+    assert chans[0]["age"] == 20.0           # the avulsion, not the -15 incision

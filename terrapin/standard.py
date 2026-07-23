@@ -130,7 +130,7 @@ class StandardTerrapin(object):
         self._remove(wedge)
         self.x_ch = x_new
 
-    def avulse(self, x_new):
+    def avulse(self, x_new, age=None):
         """
         Avulse the channel to x_new: a discontinuous hop. Unlike migration, the old
         channel is abandoned IN PLACE and the ground between old and new positions
@@ -139,7 +139,12 @@ class StandardTerrapin(object):
         over one channel width, eroding a block of material from the local surface
         downward; that block is exported as sediment. The new bed sits one channel
         depth below the surface at x_new.
+
+        The avulsion abandons the old channel now, so the optional `age` is stamped
+        on the abandoned channel floor -- its terrace age is this avulsion, not a
+        later incision that might strand it.
         """
+        self._record_surface("channel", self.z_ch, abandoned=age)
         surface = self._surface_elevation(x_new)
         z_bed = surface - self.channel_depth
         half_width = self.channel_width / 2.
