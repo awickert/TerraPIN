@@ -295,13 +295,15 @@ def test_migrate_at_capacity_leaves_a_channel_belt_deposit():
     st.set_channel_depth(4.0)
     st.incise(-15.0)
     st.migrate(30.0, at_capacity=True, age=5.0)
-    belts = [n for n in st.bodies if "channel_belt" in n]
+    # the migration belt is the channel deposit dated to the migration (incise also
+    # leaves channel-associated bank alluvium)
+    belts = [n for n in st.bodies
+             if "channel_belt" in n and st.provenance[n]["age"] == 5.0]
     assert belts
     belt = st.bodies[belts[0]]
     assert np.isclose(belt.bounds[1], -15.0)              # bottom at the strath
     assert belt.bounds[3] <= -15.0 + 4.0 + 1e-6           # top no higher than bank-top
     assert st.provenance[belts[0]]["kind"] == "channel"
-    assert st.provenance[belts[0]]["age"] == 5.0
 
 
 def test_at_capacity_exports_less_than_erosional():

@@ -111,6 +111,7 @@ class StandardTerrapin(object):
         notch = self._two_wall_wedge(z_ch, self.channel_width / 2.)
         self._remove(notch)
         self.z_ch = z_ch
+        self._fill_banks(age)
 
     def migrate(self, x_new, at_capacity=False, age=None):
         """
@@ -408,6 +409,31 @@ class StandardTerrapin(object):
         self._n_belt += 1
         self.deposited = belt.area
         self.sediment_out -= belt.area          # net export = eroded - deposited
+
+    def _fill_banks(self, age=None):
+        """Line the valley floor around the channel with a channel-depth alluvial
+        layer, up to bank-top, leaving the channel open -- so the channel is
+        bank-bounded and its top sits at the solid material beside it (review point
+        2, "good enough for now"). The banks are channel-associated alluvium; being
+        a deposit, they reduce the net exported sediment. No-op with zero channel
+        depth or width, so the symmetric-reproduction invariant is unaffected.
+        """
+        if self.channel_depth <= 0 or self.channel_width <= 0:
+            return
+        z0, z1 = self.z_ch, self.z_ch + self.channel_depth
+        half_width = self.channel_width / 2.
+        minx, _, maxx, _ = unary_union(list(self.bodies.values())).bounds
+        solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
+        channel = box(self.x_ch - half_width, z0, self.x_ch + half_width, z1)
+        banks = box(minx, z0, maxx, z1).difference(solid).difference(channel)
+        if banks.is_empty:
+            return
+        name = "channel_belt_%d" % self._n_belt
+        self.bodies[name] = banks
+        self._record_deposit(name, kind="channel", age=age)
+        self._n_belt += 1
+        self.deposited = banks.area
+        self.sediment_out -= banks.area
 
     def _domain(self, z_top):
         """A bounding box that spans the bodies and reaches above z_top."""
