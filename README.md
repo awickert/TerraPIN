@@ -78,9 +78,10 @@ conda run -n terrapin python -m pytest
 - **[`docs/architecture.md`](docs/architecture.md)** — the model: polygon
   algebra, the driver-agnostic engine, the one-wall unit, symmetric vs. the
   standard model, and terrace/provenance tracking.
-- **[`examples/`](examples)** — worked cross-sections, including
-  `terrace_tracking.py` (terraces read back and labelled by age) and
-  `symmetric_valley_terraces.py` (strath, talus, and fill-terrace formation).
+- **[`examples/`](examples)** — worked cross-sections, in
+  [`symmetric/`](examples/symmetric) (e.g. `terrace_tracking.py` — terraces read
+  back and labelled by age) and [`standard/`](examples/standard) (e.g.
+  `standard_terraces.py` — migration, avulsion, channel belts, and terraces).
 - **[AlluvStrat](https://github.com/awickert/alluvstrat)** — ADW's earlier raster
   model of alluvial stratigraphy in strike-section.
 
