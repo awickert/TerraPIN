@@ -26,7 +26,6 @@ Run in the dedicated environment:
     conda run -n terrapin python examples/low_unit_terraces.py
 """
 import os
-import sys
 
 import numpy as np
 import matplotlib
@@ -35,7 +34,6 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from shapely.geometry import box
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from terrapin.geometry import incise, widen, aggrade, eroded_wedge, colluvial_pile
 
 # --- Material palette (geoscience-flavoured), keyed by lithology ---

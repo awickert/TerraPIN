@@ -25,14 +25,12 @@ Run in the dedicated environment:
     conda run -n terrapin python examples/terrace_tracking.py
 """
 import os
-import sys
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from shapely.geometry import box
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from terrapin import Terrapin
 
 REPOSE = {"bedrock": 75.0, "alluvium": 32.0, "colluvium": 20.0}

@@ -11,7 +11,6 @@ Run in the dedicated environment:
     conda run -n terrapin python examples/random_walk_terraces.py
 """
 import os
-import sys
 
 import numpy as np
 import matplotlib
@@ -19,7 +18,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from shapely.geometry import box
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from terrapin import Terrapin
 
 rng = np.random.default_rng(3)
