@@ -335,6 +335,38 @@ def test_at_capacity_exports_less_than_erosional():
     assert np.isclose(a.sediment_out - b.deposited, b.sediment_out)   # net export
 
 
+# --- coalescing bodies that share all attributes ---
+
+def test_contiguous_same_attribute_belts_merge_into_one_body():
+    # Two migration belts of the SAME age that abut are the same material, so they
+    # amalgamate into a single polygon rather than staying as congruent pieces.
+    st = fresh(0.0, 20.0)
+    st.set_channel_depth(4.0)
+    st.incise(-12.0)
+    st.migrate(20.0, at_capacity=True, age=7.0)
+    st.migrate(40.0, at_capacity=True, age=7.0)      # second belt, same age, contiguous
+    same_age = [n for n in st.bodies
+                if st.provenance.get(n, {}) == {"kind": "channel",
+                                                "lithology": "alluvium", "age": 7.0}
+                and not st.bodies[n].is_empty]
+    assert len(same_age) == 1                         # merged, not two congruent pieces
+
+
+def test_different_age_belts_stay_separate():
+    # Two belts that touch but were laid at different times keep their own polygons:
+    # merging would erase a real age boundary.
+    st = fresh(0.0, 20.0)
+    st.set_channel_depth(4.0)
+    st.incise(-12.0, age=5.0)
+    st.migrate(40.0, at_capacity=True, age=10.0)     # right belt, age 10
+    st.avulse(-10.0, age=15.0)
+    st.aggrade(-2.0, age=20.0)                        # left belt, age 20, abuts the right
+    ages = sorted(st.provenance[n]["age"] for n in st.bodies
+                  if st.provenance.get(n, {}).get("kind") == "channel"
+                  and not st.bodies[n].is_empty)
+    assert 10.0 in ages and 20.0 in ages              # both survive as distinct bodies
+
+
 def test_at_capacity_keeps_the_active_channel_open_with_belt_behind():
     from shapely.geometry import Point
     st = fresh(0.0, 16.0)

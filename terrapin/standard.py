@@ -111,6 +111,7 @@ class StandardTerrapin(object):
         channel = box(self.x_ch - half_width, self.z_ch,
                       self.x_ch + half_width, surface)
         self.bodies = {n: g.difference(channel) for n, g in self.bodies.items()}
+        self._coalesce_bodies()
 
     def incise(self, z_ch, age=None):
         """
@@ -129,6 +130,7 @@ class StandardTerrapin(object):
         self._remove(notch)
         self.z_ch = z_ch
         self._fill_banks(age)
+        self._coalesce_bodies()
 
     def migrate(self, x_new, at_capacity=False, age=None):
         """
@@ -173,6 +175,7 @@ class StandardTerrapin(object):
         if at_capacity:
             self._deposit_channel_belt(x_new, age)
         self.x_ch = x_new
+        self._coalesce_bodies()
 
     def avulse(self, x_new, age=None):
         """
@@ -197,6 +200,7 @@ class StandardTerrapin(object):
         self._remove(block)
         self.x_ch = x_new
         self.z_ch = z_bed
+        self._coalesce_bodies()
 
     def aggrade(self, z_fill, age=None):
         """
@@ -238,6 +242,7 @@ class StandardTerrapin(object):
         self._record_surface("floodplain", z_fill, abandoned=None)
         self._n_fill += 1
         self.sediment_out = 0.
+        self._coalesce_bodies()
 
     # -------------------------------- outputs --------------------------------
 
@@ -478,3 +483,36 @@ class StandardTerrapin(object):
         solid = unary_union([g for g in self.bodies.values() if not g.is_empty])
         hit = LineString([(x, -_reach), (x, _reach)]).intersection(solid)
         return None if hit.is_empty else hit.bounds[3]      # bounds[3] = maxy = top
+
+    def _provenance_key(self, name):
+        """The full attribute signature of a body: kind, lithology, and age.
+        Two bodies are the SAME material only if all three match."""
+        p = self.provenance.get(name, {})
+        return (p.get("kind"), p.get("lithology"), p.get("age"))
+
+    def _coalesce_bodies(self, _tol=1.0e-9):
+        """Merge bodies that are spatially contiguous AND share every attribute
+        (kind, lithology, age) into a single polygon. Distinct deposits stay
+        distinct: two channel belts of different ages, or alluvium against bedrock,
+        never amalgamate -- only genuinely identical material that shares a boundary
+        does, so the model keeps one polygon per (attributes, connected region)
+        rather than accumulating redundant congruent pieces. Contiguity requires a
+        shared edge (positive-length contact), not a bare corner touch."""
+        merged = True
+        while merged:
+            merged = False
+            names = [n for n, g in self.bodies.items() if not g.is_empty]
+            for i, a in enumerate(names):
+                for b in names[i + 1:]:
+                    if self._provenance_key(a) != self._provenance_key(b):
+                        continue
+                    shared = self.bodies[a].intersection(self.bodies[b])
+                    if shared.is_empty or shared.length <= _tol:
+                        continue                       # disjoint or corner-touch only
+                    self.bodies[a] = unary_union([self.bodies[a], self.bodies[b]])
+                    del self.bodies[b]
+                    self.provenance.pop(b, None)
+                    merged = True
+                    break
+                if merged:
+                    break
