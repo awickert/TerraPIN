@@ -7,7 +7,7 @@ name: publish
 # One-time PyPI setup (owner only), at
 # https://pypi.org/manage/account/publishing/ -- add a pending publisher:
 #   PyPI project name: terrapin-valley
-#   Owner:             awickert
+#   Owner:             MNiMORPH
 #   Repository name:   TerraPIN
 #   Workflow name:     publish.yml
 #   Environment name:  pypi

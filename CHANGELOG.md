@@ -34,5 +34,5 @@ mass-balance engine.
 ### Removed
 - The legacy line-intersection model and the Python-2 `ez_setup` build bootstrap.
 
-[Unreleased]: https://github.com/awickert/TerraPIN/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/awickert/TerraPIN/compare/v0.0.0...v0.1.0
+[Unreleased]: https://github.com/MNiMORPH/TerraPIN/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/MNiMORPH/TerraPIN/compare/v0.0.0...v0.1.0

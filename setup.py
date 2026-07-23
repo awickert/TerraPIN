@@ -32,7 +32,7 @@ setup(
     license = "GPL v3",
     keywords = "fluvial geomorphology Quaternary river",
     url = "http://csdms.colorado.edu/wiki/Model:Terrapin",
-    download_url = "https://github.com/awickert/Terrapin",
+    download_url = "https://github.com/MNiMORPH/TerraPIN",
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
 )
