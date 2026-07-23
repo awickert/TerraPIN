@@ -20,6 +20,7 @@ This is a work in progress: incision (both walls) is in place; migration,
 avulsion, aggradation, and talus dynamics are to follow.
 """
 import numpy as np
+from matplotlib import pyplot as plt
 from shapely.geometry import box, LineString
 from shapely.affinity import scale, translate
 from shapely.ops import unary_union
@@ -219,6 +220,67 @@ class StandardTerrapin(object):
                 "lithology": prov.get("lithology"),
             })
         return out
+
+    @staticmethod
+    def _fmt_age(age):
+        """A compact string for an age -- a point or a (start, end) span."""
+        if age is None:
+            return "?"
+        if isinstance(age, tuple):
+            return "%g–%g" % age
+        return "%g" % age
+
+    # colour + hatch by deposit kind (bedrock and colluvium by lithology)
+    _STYLE = {"bedrock":    ("#b8926a", "//"),
+              "initial":    ("#e6cf7a", ".."),
+              "floodplain": ("#d7a43c", ".."),
+              "channel":    ("#c07b34", "xx"),   # channel-belt / paleochannel fill
+              "colluvium":  ("#9a8f7d", "xx")}
+
+    def _style(self, name):
+        litho = geometry._lithology(name)
+        if litho in ("bedrock", "colluvium"):
+            return self._STYLE[litho]
+        kind = self.provenance.get(name, {}).get("kind", "initial")
+        return self._STYLE.get(kind, self._STYLE["initial"])
+
+    def plot(self, ax=None, show_terraces=True, label_ages=True):
+        """
+        Draw the full-valley cross-section, each body coloured by deposit kind
+        (bedrock, initial alluvium, floodplain, channel-belt), the channel marked
+        at (x_ch, z_ch), and (by default) the terraces overlaid as bold benches,
+        optionally labelled by their abandonment age. Draws into `ax` if given,
+        else makes a new figure; returns the axes.
+        """
+        if ax is None:
+            _, ax = plt.subplots()
+        for name, geom in self.bodies.items():
+            if geom.is_empty:
+                continue
+            facecolor, hatch = self._style(name)
+            parts = geom.geoms if geom.geom_type != "Polygon" else [geom]
+            for p in parts:
+                if p.geom_type != "Polygon":
+                    continue
+                xs, zs = p.exterior.xy
+                ax.fill(xs, zs, facecolor=facecolor, edgecolor="k",
+                        linewidth=0.6, hatch=hatch)
+        if show_terraces:
+            for t in self.terraces():
+                ax.plot([t["x_far"], t["x_near"]], [t["z"], t["z"]],
+                        color="#c1272d", lw=2.4, solid_capstyle="butt", zorder=4)
+                if label_ages:
+                    ax.annotate("%s t=%s" % (t["kind"], self._fmt_age(t["age"])),
+                                xy=(0.5 * (t["x_far"] + t["x_near"]), t["z"]),
+                                xytext=(0, 4), textcoords="offset points",
+                                ha="center", va="bottom", fontsize=7,
+                                color="#7a1116", zorder=5)
+        ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
+                markeredgecolor="k", zorder=6)
+        ax.set_xlabel("cross-valley distance [m]")
+        ax.set_ylabel("elevation [m]")
+        ax.set_aspect("equal")
+        return ax
 
     # -------------------------------- helpers --------------------------------
 
