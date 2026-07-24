@@ -199,6 +199,38 @@ def test_migrate_erodes_an_overhang_it_cannot_slide_under():
     assert np.isclose(survives, 0.0)
 
 
+# --- sweep (the unified motion; incise/migrate/aggrade are special cases) ---
+
+def test_sweep_reproduces_incise_and_migrate_special_cases():
+    # incise = in-place drop, migrate = level move: the erosion special cases.
+    inc_a = fresh(0.0, 16.0); inc_a.incise(-12.0)
+    inc_b = fresh(0.0, 16.0); inc_b.sweep(0.0, -12.0)
+    mig_a = fresh(0.0, 16.0); mig_a.incise(-12.0); mig_a.migrate(25.0)
+    mig_b = fresh(0.0, 16.0); mig_b.sweep(0.0, -12.0); mig_b.sweep(25.0, -12.0)
+    for a, b in ((inc_a, inc_b), (mig_a, mig_b)):
+        assert set(a.bodies) == set(b.bodies)
+        for n in a.bodies:
+            assert np.isclose(a.bodies[n].area, b.bodies[n].area), n
+
+
+def test_sweep_diagonal_leaves_a_sloped_strath():
+    # planing laterally WHILE incising leaves a SLOPED strath (lateral planation +
+    # incision) -- the diagonal case the discrete ops could only approximate as a
+    # staircase of flat treads and vertical risers.
+    st = fresh(0.0, 20.0)
+    st.incise(-8.0)
+    st.sweep(40.0, -16.0)                 # migrate right to 40 while incising to -16
+    assert st.x_ch == 40.0 and np.isclose(st.z_ch, -16.0)
+    xs = np.linspace(-10.0, 30.0, 9)      # across the swept ramp
+    zs = [st._surface_elevation(x) for x in xs]
+    slope = np.polyfit(xs, zs, 1)[0]
+    assert np.isclose(slope, (-16.0 - -8.0) / 40.0, atol=1e-3)   # a clean ramp
+
+
+# NOTE: the deposition diagonal (aggrading WHILE migrating -> a SLOPED floodplain,
+# a cut+fill hybrid) is deferred; a rising move currently fills flat (aggrade).
+
+
 # --- avulse ---
 
 def test_avulse_erodes_one_channel_depth_and_width():
