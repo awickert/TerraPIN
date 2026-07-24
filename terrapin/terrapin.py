@@ -13,12 +13,12 @@ lives in terrapin.geometry; this is the stateful wrapper around it.
 Configure with the set_* methods, then drive with incise / aggrade /
 plane_laterally; read the emergent width with compute_valley_width().
 """
-import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import box
 from shapely.ops import unary_union
 
 from . import geometry
+from . import plotting
 
 __all__ = ["Terrapin"]
 
@@ -253,42 +253,13 @@ class Terrapin(object):
         age -- the age of abandonment, which is the terrace's age. Pass
         label_ages=False for the same scene without the annotations.
         """
-        fill = {'bedrock': ('#b8926a', '//'), 'alluvium': ('#e6cf7a', '..'),
-                'colluvium': ('#9a8f7d', 'xx')}
-        def lithology(name):
-            for key in fill:
-                if key in name:
-                    return key
-            return 'alluvium'
         fig, ax = plt.subplots()
-        for name, geom in self.bodies.items():
-            if geom.is_empty:
-                continue
-            facecolor, hatch = fill[lithology(name)]
-            if geom.geom_type == 'Polygon':
-                parts = [geom]
-            else:                       # MultiPolygon or GeometryCollection
-                parts = [g for g in geom.geoms if g.geom_type == 'Polygon']
-            for p in parts:
-                xs, zs = p.exterior.xy
-                xs = np.asarray(xs)
-                for sign in ((1, -1) if mirror else (1,)):
-                    ax.fill(sign * xs, zs, facecolor=facecolor, edgecolor='k',
-                            linewidth=0.6, hatch=hatch)
+        plotting.draw_bodies(ax, self.bodies, geometry._lithology, mirror=mirror)
         if show_terraces:
-            for t in self.terraces():
-                for sign in ((1, -1) if mirror else (1,)):
-                    ax.plot([sign * t['x_far'], sign * t['x_near']],
-                            [t['z'], t['z']], color='#c1272d', lw=2.4,
-                            solid_capstyle='butt', zorder=4)
-                if label_ages:
-                    xm = 0.5 * (t['x_far'] + t['x_near'])   # label the left unit
-                    ax.annotate("%s  t=%s" % (t['kind'], self._fmt_age(t['age'])),
-                                xy=(xm, t['z']), xytext=(0, 4),
-                                textcoords='offset points', ha='center',
-                                va='bottom', fontsize=7.5, color='#7a1116',
-                                zorder=5)
-        ax.plot(0, self.z_ch, 'v', color='#1f6fb2', markeredgecolor='k')
+            plotting.draw_terraces(ax, self.terraces(), self._fmt_age, mirror=mirror,
+                                   label_ages=label_ages, fontsize=7.5,
+                                   label_fmt="%s  t=%s")
+        plotting.draw_channel_marker(ax, 0, self.z_ch)
         ax.set_xlabel('cross-valley distance [m]')
         ax.set_ylabel('elevation [m]')
         ax.set_aspect('equal')
