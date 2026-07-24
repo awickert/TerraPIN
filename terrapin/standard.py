@@ -26,6 +26,7 @@ from shapely.affinity import scale, translate
 from shapely.ops import unary_union
 
 from . import geometry
+from . import plotting
 
 __all__ = ["StandardTerrapin"]
 
@@ -302,64 +303,38 @@ class StandardTerrapin(object):
             return "%g–%g" % age
         return "%g" % age
 
-    # colour + hatch by deposit kind (bedrock and colluvium by lithology)
-    _STYLE = {"bedrock":    ("#b8926a", "//"),
-              "initial":    ("#e6cf7a", ".."),
-              "floodplain": ("#d7a43c", ".."),
-              "channel":    ("#c07b34", "xx"),   # channel-belt / paleochannel fill
-              "colluvium":  ("#9a8f7d", "xx")}
+    # the standard model's fill categories, a view of the shared style table
+    # (bedrock/colluvium by lithology; alluvium bodies by deposit kind)
+    _STYLE = {k: plotting.STYLE[k]
+              for k in ("bedrock", "initial", "floodplain", "channel", "colluvium")}
 
-    def _style(self, name):
+    def _category(self, name):
+        """The body's fill category: lithology for bedrock/colluvium, else the
+        deposit kind (initial/floodplain/channel) from its provenance."""
         litho = geometry._lithology(name)
         if litho in ("bedrock", "colluvium"):
-            return self._STYLE[litho]
-        kind = self.provenance.get(name, {}).get("kind", "initial")
-        return self._STYLE.get(kind, self._STYLE["initial"])
+            return litho
+        return self.provenance.get(name, {}).get("kind", "initial")
 
     def plot(self, ax=None, show_terraces=True, label_ages=True):
         """
         Draw the full-valley cross-section, each body coloured by deposit kind
-        (bedrock, initial alluvium, floodplain, channel-belt), the channel marked
-        at (x_ch, z_ch), and (by default) the terraces overlaid as bold benches,
+        (bedrock, initial alluvium, floodplain, channel-belt), the channel at
+        (x_ch, z_ch), and (by default) the terraces overlaid as bold benches,
         optionally labelled by their abandonment age. Draws into `ax` if given,
         else makes a new figure; returns the axes.
         """
         if ax is None:
             _, ax = plt.subplots()
-        for name, geom in self.bodies.items():
-            if geom.is_empty:
-                continue
-            facecolor, hatch = self._style(name)
-            parts = geom.geoms if geom.geom_type != "Polygon" else [geom]
-            for p in parts:
-                if p.geom_type != "Polygon":
-                    continue
-                xs, zs = p.exterior.xy
-                ax.fill(xs, zs, facecolor=facecolor, edgecolor="k",
-                        linewidth=0.6, hatch=hatch)
+        plotting.draw_bodies(ax, self.bodies, self._category)
         if show_terraces:
-            for t in self.terraces():
-                ax.plot([t["x_far"], t["x_near"]], [t["z"], t["z"]],
-                        color="#c1272d", lw=2.4, solid_capstyle="butt", zorder=4)
-                if label_ages:
-                    ax.annotate("%s t=%s" % (t["kind"], self._fmt_age(t["age"])),
-                                xy=(0.5 * (t["x_far"] + t["x_near"]), t["z"]),
-                                xytext=(0, 4), textcoords="offset points",
-                                ha="center", va="bottom", fontsize=7,
-                                color="#7a1116", zorder=5)
-        half_width = self.channel_width / 2.
-        if half_width > 0 and self.channel_depth > 0:
-            # the channel is its prescribed width x depth, pinned bottom-centre at
-            # (x_ch, z_ch); the model keeps z_ch = surface - depth after every op, so
-            # its top sits at the local surface. Drawn as-is: if the invariant ever
-            # breaks, the channel visibly floats rather than being silently clipped.
-            x0, x1 = self.x_ch - half_width, self.x_ch + half_width
-            top = self.z_ch + self.channel_depth
-            ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, top, top],
-                    facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
+            plotting.draw_terraces(ax, self.terraces(), self._fmt_age,
+                                   label_ages=label_ages)
+        if self.channel_width > 0 and self.channel_depth > 0:
+            plotting.draw_channel_box(ax, self.x_ch, self.z_ch,
+                                      self.channel_width, self.channel_depth)
         elif self._surface_elevation(self.x_ch) is not None:
-            ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
-                    markeredgecolor="k", zorder=6)
+            plotting.draw_channel_marker(ax, self.x_ch, self.z_ch, zorder=6)
         ax.set_xlabel("cross-valley distance [m]")
         ax.set_ylabel("elevation [m]")
         ax.set_aspect("equal")
