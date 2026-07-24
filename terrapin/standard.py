@@ -348,16 +348,15 @@ class StandardTerrapin(object):
                                 ha="center", va="bottom", fontsize=7,
                                 color="#7a1116", zorder=5)
         half_width = self.channel_width / 2.
-        if half_width > 0:                          # finite channel: a river-blue box
-            # never draw the channel above the ground: clip its top to the banks
-            banks = [self._surface_elevation(self.x_ch - half_width - 1.0e-3),
-                     self._surface_elevation(self.x_ch + half_width + 1.0e-3)]
-            banks = [b for b in banks if b is not None]
-            top = min([self.z_ch + self.channel_depth] + banks) if banks else self.z_ch
-            if top > self.z_ch + 1.0e-9:            # a real, bank-bounded channel
-                x0, x1 = self.x_ch - half_width, self.x_ch + half_width
-                ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, top, top],
-                        facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
+        if half_width > 0 and self.channel_depth > 0:
+            # the channel is its prescribed width x depth, pinned bottom-centre at
+            # (x_ch, z_ch); the model keeps z_ch = surface - depth after every op, so
+            # its top sits at the local surface. Drawn as-is: if the invariant ever
+            # breaks, the channel visibly floats rather than being silently clipped.
+            x0, x1 = self.x_ch - half_width, self.x_ch + half_width
+            top = self.z_ch + self.channel_depth
+            ax.fill([x0, x1, x1, x0], [self.z_ch, self.z_ch, top, top],
+                    facecolor="#2b7bba", edgecolor="k", linewidth=0.6, zorder=6)
         elif self._surface_elevation(self.x_ch) is not None:
             ax.plot(self.x_ch, self.z_ch, "v", color="#1f6fb2",
                     markeredgecolor="k", zorder=6)
