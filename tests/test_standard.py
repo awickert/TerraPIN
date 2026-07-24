@@ -212,6 +212,35 @@ def test_avulse_erodes_one_channel_depth_and_width():
     assert np.isclose(st.sediment_out, sum(st.eroded.values()))
 
 
+def test_avulse_grades_the_cut_valley_wall_to_repose():
+    from shapely.geometry import Point
+    # Where an avulsion cuts through higher valley-wall alluvium, the exposed wall
+    # must fail back to the alluvium's angle of repose (32 deg), not stand vertical.
+    st = StandardTerrapin()
+    st.set_bodies({"bedrock": box(-120, -70, 120, -8),
+                   "alluvium": box(-120, -8, 120, 0)})
+    st.set_repose_angles(REPOSE)
+    st.set_channel_position(0.0)
+    st.set_channel_elevation(0.0)
+    st.set_channel_width(20.0)
+    st.set_channel_depth(4.0)
+    st.establish_channel(); st.incise(-12.0); st.migrate(45.0, at_capacity=True)
+    st.avulse(-10.0)                       # lands in the low, cutting the left wall
+
+    solid = unary_union([g for g in st.bodies.values() if not g.is_empty])
+    def face_x(z):                         # rightmost solid x of the left wall at z
+        x = -60.0
+        while x < 5.0:
+            if solid.covers(Point(x, z)) and not solid.covers(Point(x + 0.05, z)):
+                return x + 0.025
+            x += 0.05
+        return None
+    lo, hi = face_x(-7.5), face_x(-0.5)    # within the alluvium band above the bed
+    angle = np.degrees(np.arctan2(abs(-0.5 - -7.5), abs(hi - lo)))
+    assert np.isclose(angle, 32.0, atol=1.5)          # laid back to alluvium repose
+    assert hi < lo - 5.0                              # top set well back: not vertical
+
+
 def test_avulse_preserves_the_abandoned_belt():
     # Unlike migrate, avulse does not plane the corridor: the ground between the
     # old channel and the landing site is left untouched.

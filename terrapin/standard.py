@@ -183,21 +183,34 @@ class StandardTerrapin(object):
         channel is abandoned IN PLACE and the ground between old and new positions
         is NOT planed -- so the vacated belt is preserved, to be buried by later
         aggradation. Where it lands, the new channel cuts down one channel depth
-        below the local surface and erodes EVERYTHING above its bed across its
-        width -- it cannot lie under material it did not erode (so where the width
-        spans higher valley-wall alluvium, that alluvium is cut through, not
-        overhung). The eroded material is exported as sediment.
+        below the local surface, a vertical-banked slot one channel width wide.
+
+        Above the channel top, where the cut passes through HIGHER valley-wall
+        material, that material is undercut and fails back to its angle of repose --
+        so the exposed wall snaps to repose, it is not left standing vertical, and it
+        is never left overhanging (the removal reaches the full column above the bed).
+        On flat ground nothing stands above the channel top, so the banks stay
+        vertical and the eroded volume is just width x depth. The eroded material is
+        exported as sediment.
 
         The avulsion abandons the old channel now, so the optional `age` is stamped
         on the abandoned channel floor -- its terrace age is this avulsion, not a
         later incision that might strand it.
         """
         self._record_surface("channel", self.z_ch, abandoned=age)
-        z_bed = self._surface_elevation(x_new) - self.channel_depth
+        surface = self._surface_elevation(x_new)
+        z_bed = surface - self.channel_depth
         half_width = self.channel_width / 2.
+        # The channel slot: a vertical-banked box (width x depth), plus the full
+        # column above it so nothing is left overhanging.
         ceiling = unary_union(list(self.bodies.values())).bounds[3] + 1.0
         block = box(x_new - half_width, z_bed, x_new + half_width, ceiling)
-        self._remove(block)
+        # Grade the valley-wall material ABOVE the channel top back to repose, so the
+        # exposed wall lies at its angle of repose rather than standing vertical.
+        walls = unary_union([
+            self._wall_wedge(surface, half_width, x_new, "left"),
+            self._wall_wedge(surface, half_width, x_new, "right")])
+        self._remove(unary_union([block, walls]))
         self.x_ch = x_new
         self.z_ch = z_bed
         self._coalesce_bodies()
