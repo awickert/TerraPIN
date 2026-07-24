@@ -227,8 +227,9 @@ def test_sweep_diagonal_leaves_a_sloped_strath():
     assert np.isclose(slope, (-16.0 - -8.0) / 40.0, atol=1e-3)   # a clean ramp
 
 
-# NOTE: the deposition diagonal (aggrading WHILE migrating -> a SLOPED floodplain,
-# a cut+fill hybrid) is deferred; a rising move currently fills flat (aggrade).
+# A rise fills to a FLAT floodplain surface (a floodplain is horizontal in
+# cross-section), so there is no sloped-deposition analogue to the sloped strath:
+# aggradation fills flat whether or not the channel also moves laterally.
 
 
 # --- avulse ---

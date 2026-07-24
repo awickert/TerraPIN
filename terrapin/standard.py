@@ -230,11 +230,13 @@ class StandardTerrapin(object):
         whether the new bed lies below or above the current one -- not by a flag.
 
         Special cases: incise = in-place drop (x1 == x_ch), migrate = level move
-        (z1 == z_ch), aggrade = in-place rise. A diagonal DROP leaves a sloped
-        strath (the new capability). NOTE: a diagonal RISE currently fills flat
-        (aggrade) and relocates the channel; the sloped-floodplain / cut+fill
-        deposition is deferred. (incise() additionally abandons stranded surfaces
-        and lines its banks; call it for that bookkeeping.)
+        (z1 == z_ch), aggrade = in-place rise. A diagonal DROP leaves a SLOPED
+        strath (lateral planation while incising -- the new capability). A RISE
+        fills to a FLAT floodplain surface: a floodplain is horizontal in
+        cross-section, so aggradation fills flat whether or not the channel also
+        moves laterally (there is no sloped-deposition analogue). (incise()
+        additionally abandons stranded surfaces and lines its banks; call it for
+        that bookkeeping.)
         """
         if z1 > self.z_ch:
             self._sweep_deposit(x1, z1, age)
@@ -435,9 +437,9 @@ class StandardTerrapin(object):
         channel column is left open above its bed z1, and the fill in that column
         below the bed becomes CHANNEL-BELT deposit, the rest overbank FLOODPLAIN.
         This is the deposition half of the unified sweep; aggradation in place is
-        the x1 == x_ch case. NOTE: the fill is FLAT to z_fill (via geometry.aggrade);
-        a diagonal rise thus fills flat and relocates the channel -- the sloped /
-        cut+fill deposition is deferred.
+        the x1 == x_ch case. The fill is FLAT to z_fill (a floodplain is horizontal
+        in cross-section), so a rise fills flat whether or not it also moves
+        laterally -- there is no sloped-deposition analogue to the sloped strath.
         """
         z_fill = z1 + self.channel_depth                # floodplain surface
         name = "alluvium_fill_%d" % self._n_fill
