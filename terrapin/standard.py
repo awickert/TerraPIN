@@ -21,7 +21,7 @@ avulsion, aggradation, and talus dynamics are to follow.
 """
 import numpy as np
 from matplotlib import pyplot as plt
-from shapely.geometry import box, LineString
+from shapely.geometry import box, LineString, Polygon
 from shapely.affinity import scale, translate
 from shapely.ops import unary_union
 
@@ -127,9 +127,9 @@ class StandardTerrapin(object):
         stamped on each surface newly abandoned by this cut.
         """
         self._abandon_stranded(z_ch, age)
-        notch = self._two_wall_wedge(z_ch, self.channel_width / 2.)
-        self._remove(notch)
-        self.z_ch = z_ch
+        # incision is the in-place (x unchanged) case of the erosion sweep: both
+        # walls are cut, the strath is the flat floor at z_ch
+        self._sweep_erode(self.x_ch, z_ch)
         self._fill_banks(age)
         self._coalesce_bodies()
 
@@ -159,24 +159,8 @@ class StandardTerrapin(object):
             self.deposited = 0.0
             self.sediment_out = 0.0
             return
-        side = "right" if x_new > self.x_ch else "left"
-        floor_half_width = abs(x_new - self.x_ch) + self.channel_width / 2.
-        wedge = self._wall_wedge(self.z_ch, floor_half_width, self.x_ch, side)
-        # The channel bed sweeps the whole corridor, so it erodes EVERYTHING above
-        # the bed there: it cannot slide under an overhang. Remove the full column
-        # across the swept corridor (bank to bank), then let the advancing wall
-        # grade back to repose beyond it.
-        half_width = self.channel_width / 2.
-        lo = min(self.x_ch, x_new) - half_width         # retreating bank
-        hi = max(self.x_ch, x_new) + half_width         # advancing bank
-        ceiling = unary_union(list(self.bodies.values())).bounds[3] + 1.0
-        corridor = box(lo, self.z_ch, hi, ceiling)
-        self._remove(unary_union([corridor, wedge]))
-        self.deposited = 0.0
-        if at_capacity:
-            self._deposit_channel_belt(x_new, age)
-        self.x_ch = x_new
-        self._coalesce_bodies()
+        # migration is the horizontal (z unchanged) case of the sweep
+        self.sweep(x_new, self.z_ch, at_capacity=at_capacity, age=age)
 
     def avulse(self, x_new, age=None):
         """
@@ -228,34 +212,34 @@ class StandardTerrapin(object):
         `age` (a point or a (start, end) span). Its top is the live floodplain
         surface until a later incision strands it as a fill terrace.
         """
-        name = "alluvium_fill_%d" % self._n_fill
-        self.bodies, _ = geometry.aggrade(
-            self.bodies, z_fill, self._domain(z_fill), name=name)
-        fill = self.bodies[name]
-        self.z_ch = z_fill - self.channel_depth
-        half_width = self.channel_width / 2.
-        self.deposited = fill.area
-        if self.channel_depth > 0 and half_width > 0:
-            # The channel aggrades with its floodplain: its bed rises to one channel
-            # depth below the new surface, leaving CHANNEL-BELT deposit in its column
-            # below the new bed and the channel itself open above it. Outside the
-            # column, the fill is overbank floodplain.
-            column = box(self.x_ch - half_width, z_fill - 1.0e6,
-                         self.x_ch + half_width, z_fill)
-            channel = box(self.x_ch - half_width, self.z_ch,
-                          self.x_ch + half_width, z_fill)          # open channel
-            belt = fill.intersection(column).difference(channel)   # channel-belt below the bed
-            self.bodies[name] = fill.difference(column)            # overbank floodplain
-            if not belt.is_empty:
-                belt_name = "channel_belt_%d" % self._n_belt
-                self.bodies[belt_name] = belt
-                self._record_deposit(belt_name, kind="channel", age=age)
-                self._n_belt += 1
-            self.deposited = self.bodies[name].area + belt.area
-        self._record_deposit(name, kind="floodplain", age=age)
-        self._record_surface("floodplain", z_fill, abandoned=None)
-        self._n_fill += 1
-        self.sediment_out = 0.
+        # aggradation is the in-place (x unchanged) case of the deposition sweep:
+        # the bed rises to z_fill - channel_depth
+        self.sweep(self.x_ch, z_fill - self.channel_depth, age=age)
+
+    def sweep(self, x1, z1, at_capacity=False, age=None):
+        """
+        Move the channel from its current position to (x1, z1) -- the unified
+        motion of which incise, migrate, and aggrade are special cases.
+
+        A level or downward move ERODES: the bed planes a strath across the swept
+        corridor (SLOPED if the move is also lateral -- lateral planation while
+        incising) and grades the advancing wall to repose; with at_capacity it
+        leaves a channel-belt over the strath. An upward move DEPOSITS: the valley
+        fills to the new floodplain surface, leaving the channel open and a
+        channel-belt below its bed. Which one happens is read from the geometry --
+        whether the new bed lies below or above the current one -- not by a flag.
+
+        Special cases: incise = in-place drop (x1 == x_ch), migrate = level move
+        (z1 == z_ch), aggrade = in-place rise. A diagonal DROP leaves a sloped
+        strath (the new capability). NOTE: a diagonal RISE currently fills flat
+        (aggrade) and relocates the channel; the sloped-floodplain / cut+fill
+        deposition is deferred. (incise() additionally abandons stranded surfaces
+        and lines its banks; call it for that bookkeeping.)
+        """
+        if z1 > self.z_ch:
+            self._sweep_deposit(x1, z1, age)
+        else:
+            self._sweep_erode(x1, z1, at_capacity=at_capacity, age=age)
         self._coalesce_bodies()
 
     # -------------------------------- outputs --------------------------------
@@ -407,6 +391,77 @@ class StandardTerrapin(object):
         return unary_union([
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "left"),
             self._wall_wedge(z_ch, floor_half_width, self.x_ch, "right")])
+
+    def _sweep_erode(self, x1, z1, at_capacity=False, age=None):
+        """Erode as the channel bed sweeps from (x_ch, z_ch) to (x1, z1).
+
+        The channel bed traces the line to (x1, z1), leaving a strath: a ramp from
+        the retreating bank down/up to the advancing bank, then the flat channel
+        floor. Everything above that strath across the swept corridor is removed
+        (full column -- no overhang), and the advancing wall is graded to repose
+        (both walls when x1 == x_ch, the symmetric in-place cut = incision). The
+        retreating wall is left (its strath abandoned). With at_capacity, a
+        channel-belt of alluvium is left over the planed strath (a deposit).
+
+        This is the erosion half of the unified sweep: incision is the x1 == x_ch
+        (vertical) case, migration the z1 == z_ch (horizontal) case, and a diagonal
+        sweep (both changing) leaves a SLOPED strath -- lateral planation while
+        incising or aggrading.
+        """
+        x0, z0 = self.x_ch, self.z_ch
+        hw = self.channel_width / 2.
+        ceiling = unary_union(list(self.bodies.values())).bounds[3] + 1.0
+        if x1 >= x0:                                    # rightward, or in-place
+            strath = [(x0 - hw, z0), (x1 - hw, z1), (x1 + hw, z1)]
+            corridor = Polygon(strath + [(x1 + hw, ceiling), (x0 - hw, ceiling)])
+            walls = [self._wall_wedge(z1, hw, x1, "right")]
+            if x1 == x0:                                # symmetric in-place cut
+                walls.append(self._wall_wedge(z1, hw, x0, "left"))
+        else:                                           # leftward
+            strath = [(x1 - hw, z1), (x1 + hw, z1), (x0 + hw, z0)]
+            corridor = Polygon([(x1 - hw, ceiling)] + strath + [(x0 + hw, ceiling)])
+            walls = [self._wall_wedge(z1, hw, x1, "left")]
+        self._remove(unary_union([corridor] + walls))
+        self.deposited = 0.0
+        self.z_ch = z1
+        if at_capacity:
+            self._deposit_channel_belt(x1, age)         # uses old self.x_ch + x1
+        self.x_ch = x1
+
+    def _sweep_deposit(self, x1, z1, age=None):
+        """Deposit as the channel rises from (x_ch, z_ch) to (x1, z1), z1 > z_ch.
+
+        The valley fills up to the new floodplain surface (z1 + channel_depth); the
+        channel column is left open above its bed z1, and the fill in that column
+        below the bed becomes CHANNEL-BELT deposit, the rest overbank FLOODPLAIN.
+        This is the deposition half of the unified sweep; aggradation in place is
+        the x1 == x_ch case. NOTE: the fill is FLAT to z_fill (via geometry.aggrade);
+        a diagonal rise thus fills flat and relocates the channel -- the sloped /
+        cut+fill deposition is deferred.
+        """
+        z_fill = z1 + self.channel_depth                # floodplain surface
+        name = "alluvium_fill_%d" % self._n_fill
+        self.bodies, _ = geometry.aggrade(
+            self.bodies, z_fill, self._domain(z_fill), name=name)
+        fill = self.bodies[name]
+        self.x_ch, self.z_ch = x1, z1
+        half_width = self.channel_width / 2.
+        self.deposited = fill.area
+        if self.channel_depth > 0 and half_width > 0:
+            column = box(x1 - half_width, z_fill - 1.0e6, x1 + half_width, z_fill)
+            channel = box(x1 - half_width, z1, x1 + half_width, z_fill)  # open channel
+            belt = fill.intersection(column).difference(channel)
+            self.bodies[name] = fill.difference(column)                 # overbank
+            if not belt.is_empty:
+                belt_name = "channel_belt_%d" % self._n_belt
+                self.bodies[belt_name] = belt
+                self._record_deposit(belt_name, kind="channel", age=age)
+                self._n_belt += 1
+            self.deposited = self.bodies[name].area + belt.area
+        self._record_deposit(name, kind="floodplain", age=age)
+        self._record_surface("floodplain", z_fill, abandoned=None)
+        self._n_fill += 1
+        self.sediment_out = 0.
 
     def _deposit_channel_belt(self, x_new, age):
         """Lay a channel-belt of alluvium, one channel depth thick, bank to bank.
