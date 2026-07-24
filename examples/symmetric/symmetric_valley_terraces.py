@@ -27,7 +27,6 @@ Run in the dedicated environment:
 """
 import os
 
-import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -35,14 +34,12 @@ from matplotlib.patches import Patch
 from shapely.geometry import box
 
 from terrapin.geometry import incise, widen, aggrade, eroded_wedge, colluvial_pile
+from terrapin import plotting
 
-# --- Material palette (geoscience-flavoured), keyed by lithology ---
-STYLE = {
-    "bedrock":   dict(fc="#b8926a", hatch="//", label="bedrock"),
-    "alluvium":  dict(fc="#e6cf7a", hatch="..", label="alluvium"),
-    "fill":      dict(fc="#d7a43c", hatch="..", label="alluvial fill / terrace"),
-    "colluvium": dict(fc="#9a8f7d", hatch="xx", label="colluvium (talus)"),
-}
+# lithology -> legend label; the colours/hatches come from terrapin.plotting.STYLE.
+# This example distinguishes an alluvial *fill* from the pre-existing alluvium.
+LABELS = {"bedrock": "bedrock", "alluvium": "alluvium",
+          "fill": "alluvial fill / terrace", "colluvium": "colluvium (talus)"}
 
 
 def lithology(name):
@@ -56,17 +53,7 @@ def lithology(name):
 
 
 def draw(ax, bodies, z_ch, title, subtitle):
-    for name, geom in bodies.items():
-        if geom.is_empty:
-            continue
-        st = STYLE[lithology(name)]
-        parts = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
-        for p in parts:
-            xs, zs = p.exterior.xy
-            xs = np.asarray(xs)
-            for sign in (1, -1):                      # mirror about the channel
-                ax.fill(sign * xs, zs, facecolor=st["fc"], edgecolor="k",
-                        linewidth=0.6, hatch=st["hatch"], zorder=1)
+    plotting.draw_bodies(ax, bodies, lithology, mirror=True)   # full valley
     ax.plot(0, z_ch, marker="v", color="#1f6fb2", ms=9, zorder=3,
             markeredgecolor="k")                      # channel
     ax.set_title(title, fontsize=10.5, fontweight="bold", pad=16)
@@ -131,8 +118,9 @@ for ax in axes[:, 0]:
 fig.supxlabel("cross-valley distance [m]  (one wall, mirrored about the channel)",
               fontsize=10, y=0.06)
 
-handles = [Patch(facecolor=s["fc"], edgecolor="k", hatch=s["hatch"],
-                 label=s["label"]) for s in STYLE.values()]
+handles = [Patch(facecolor=plotting.STYLE[k][0], edgecolor="k",
+                 hatch=plotting.STYLE[k][1], label=LABELS[k])
+           for k in ("bedrock", "alluvium", "fill", "colluvium")]
 handles.append(plt.Line2D([], [], marker="v", color="#1f6fb2", ls="",
                           markeredgecolor="k", label="channel"))
 fig.legend(handles=handles, loc="lower center", ncol=5, fontsize=9,
